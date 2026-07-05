@@ -1,0 +1,23 @@
+.empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--ion-color-medium);
+}
+.barcode {
+  margin-top: 1rem;
+  text-align: center;
+}
+.barcode img {
+  max-width: 100%;
+  height: auto;
+  background: white;
+  padding: 0.5rem;
+  border: 1px solid var(--ion-color-light);
+  border-radius: 4px;
+}
+.raw {
+  font-family: monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+  color: var(--ion-color-medium);
+}

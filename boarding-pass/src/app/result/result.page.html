@@ -1,0 +1,54 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="goHome()">
+        <ion-icon name="arrow-back"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+    <ion-title>{{ filename }}</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div *ngIf="passes.length === 0" class="empty">
+    <p>No se encontraron tarjetas en este PDF.</p>
+  </div>
+
+  <ion-card *ngFor="let pass of passes">
+    <ion-card-header>
+      <ion-card-subtitle>Página {{ pass.page }} · {{ pass.format }}</ion-card-subtitle>
+      <ion-card-title>{{ labelFor(pass) }}</ion-card-title>
+    </ion-card-header>
+
+    <ion-card-content>
+      <ng-container *ngIf="pass.kind === 'flight'">
+        <ion-grid>
+          <ion-row><ion-col size="4"><b>Pasajero</b></ion-col><ion-col>{{ pass.name }}</ion-col></ion-row>
+          <ion-row><ion-col size="4"><b>PNR</b></ion-col><ion-col>{{ pass.pnr }}</ion-col></ion-row>
+          <ion-row><ion-col size="4"><b>Vuelo</b></ion-col><ion-col>{{ pass.airline }}{{ pass.flight }}</ion-col></ion-row>
+          <ion-row><ion-col size="4"><b>Fecha</b></ion-col><ion-col>{{ pass.flight_date }}</ion-col></ion-row>
+          <ion-row><ion-col size="4"><b>Clase</b></ion-col><ion-col>{{ pass.class }}</ion-col></ion-row>
+          <ion-row><ion-col size="4"><b>Asiento</b></ion-col><ion-col>{{ pass.seat }}</ion-col></ion-row>
+        </ion-grid>
+      </ng-container>
+
+      <ng-container *ngIf="pass.kind === 'train'">
+        <ion-grid>
+          <ion-row><ion-col size="4"><b>Localizador</b></ion-col><ion-col>{{ pass.pnr }}</ion-col></ion-row>
+          <ion-row><ion-col size="4"><b>Tren</b></ion-col><ion-col>{{ pass.train }}</ion-col></ion-row>
+          <ion-row><ion-col size="4"><b>Fecha</b></ion-col><ion-col>{{ pass.flight_date }}</ion-col></ion-row>
+          <ion-row><ion-col size="4"><b>Hora</b></ion-col><ion-col>{{ pass.flight_time }}</ion-col></ion-row>
+          <ion-row><ion-col size="4"><b>Clase</b></ion-col><ion-col>{{ pass.class }}</ion-col></ion-row>
+        </ion-grid>
+      </ng-container>
+
+      <ng-container *ngIf="pass.format === 'URL' || pass.format === 'UNKNOWN'">
+        <p class="raw">{{ pass.raw }}</p>
+      </ng-container>
+
+      <div *ngIf="imageFor(pass) as img" class="barcode">
+        <img [src]="'data:image/png;base64,' + img.base64" alt="barcode" />
+      </div>
+    </ion-card-content>
+  </ion-card>
+</ion-content>

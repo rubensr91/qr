@@ -1,0 +1,8 @@
+{
+  "appId": "com.qrextractor.boardingpass",
+  "appName": "Boarding Pass",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

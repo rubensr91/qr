@@ -1,0 +1,19 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>
+      Boarding Pass
+    </ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <div class="hero">
+    <ion-icon name="airplane" size="large"></ion-icon>
+    <h1>Subir tarjeta de embarque</h1>
+    <p>Selecciona un PDF de Vueling, Iberia, Ryanair, Renfe, OUIGO, etc.</p>
+    <ion-button expand="block" size="large" (click)="pickAndUpload()" [disabled]="busy">
+      <ion-icon name="document-attach" slot="start"></ion-icon>
+      Elegir PDF
+    </ion-button>
+  </div>
+</ion-content>

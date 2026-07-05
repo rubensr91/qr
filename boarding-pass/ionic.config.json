@@ -1,0 +1,7 @@
+{
+  "name": "boarding-pass",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular"
+}
