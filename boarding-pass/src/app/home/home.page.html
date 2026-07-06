@@ -1,19 +1,37 @@
 <ion-header [translucent]="true">
   <ion-toolbar>
-    <ion-title>
-      Boarding Pass
-    </ion-title>
+    <ion-title>Boarding Pass</ion-title>
+    <ion-buttons slot="end">
+      <ion-button routerLink="/trips">
+        <ion-icon name="briefcase-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
 <ion-content [fullscreen]="true">
   <div class="hero">
     <ion-icon name="airplane" size="large"></ion-icon>
-    <h1>Subir tarjeta de embarque</h1>
-    <p>Selecciona un PDF de Vueling, Iberia, Ryanair, Renfe, OUIGO, etc.</p>
-    <ion-button expand="block" size="large" (click)="pickAndUpload()" [disabled]="busy">
-      <ion-icon name="document-attach" slot="start"></ion-icon>
-      Elegir PDF
+    <h1>Crea tu viaje</h1>
+    <p>Sube todos tus archivos (billetes, hoteles, reservas) y añade manualmente lo que necesites.</p>
+
+    <ion-button expand="block" size="large" routerLink="/trip-create" class="primary-cta">
+      <ion-icon name="add-circle-outline" slot="start"></ion-icon>
+      Crear nuevo viaje
+    </ion-button>
+
+    <div class="or-divider">
+      <span>o acceso rápido</span>
+    </div>
+
+    <ion-button expand="block" size="large" (click)="pickAndUpload()" [disabled]="busy" fill="outline">
+      <ion-icon name="documents-outline" slot="start"></ion-icon>
+      {{ busy ? 'Procesando ' + progress + '…' : 'Subir solo archivos' }}
+    </ion-button>
+
+    <ion-button expand="block" fill="clear" routerLink="/trips" class="trips-link">
+      <ion-icon name="briefcase-outline" slot="start"></ion-icon>
+      Mis viajes guardados
     </ion-button>
   </div>
 </ion-content>

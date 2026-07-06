@@ -2,7 +2,8 @@ import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { LoadingController, ToastController } from '@ionic/angular';
-import { BoardingPassService } from '../services/boarding-pass.service';
+import { firstValueFrom } from 'rxjs';
+import { BoardingPassService, ExtractResponse, Pass } from '../services/boarding-pass.service';
 
 @Component({
   selector: 'app-home',
@@ -12,6 +13,7 @@ import { BoardingPassService } from '../services/boarding-pass.service';
 })
 export class HomePage {
   busy = false;
+  progress = '';
 
   constructor(
     private svc: BoardingPassService,
@@ -24,53 +26,86 @@ export class HomePage {
     let picked: any[] = [];
     try {
       const result = await FilePicker.pickFiles({
-        types: ['application/pdf'],
-        limit: 1,
+        types: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'],
+        limit: 0,
       });
       picked = result.files;
     } catch (e: any) {
-      // El usuario cancela -> no es error
       if (String(e?.message ?? e).toLowerCase().includes('cancel')) return;
       await this.toast('No se pudo abrir el selector de archivos', 'danger');
       return;
     }
 
     if (!picked || picked.length === 0) return;
-    const file = picked[0];
 
-    const loading = await this.loadingCtrl.create({ message: 'Procesando PDF…' });
+    const loading = await this.loadingCtrl.create({ message: 'Procesando PDFs…' });
     await loading.present();
     this.busy = true;
 
-    try {
-      const f = await this.toBlob(file);
-      const resp = await this.svc.uploadPdf(f).toPromise();
-      await loading.dismiss();
-      this.busy = false;
-      if (!resp) throw new Error('Respuesta vacía del servidor');
-      this.router.navigate(['/result'], {
-        state: { filename: resp.filename, passes: resp.passes, images: resp.images },
-      });
-    } catch (e: any) {
-      await loading.dismiss();
-      this.busy = false;
-      await this.toast('Error: ' + (e?.error?.detail ?? e?.message ?? e), 'danger');
+    const allPasses: Pass[] = [];
+    const allImages: any[] = [];
+    const filenames: string[] = [];
+    let errors = 0;
+
+    for (let i = 0; i < picked.length; i++) {
+      const file = picked[i];
+      const filename = file.name || `pdf_${i + 1}.pdf`;
+      this.progress = `${i + 1}/${picked.length}`;
+      loading.message = `Procesando ${i + 1}/${picked.length}: ${filename}`;
+
+      try {
+        const f = await this.toBlob(file);
+        const resp = await firstValueFrom(this.svc.uploadPdf(f));
+        if (resp) {
+          // Marcar cada pase con el nombre del archivo de origen
+          for (const p of resp.passes) {
+            p.sourceFile = filename;
+          }
+          allPasses.push(...resp.passes);
+          allImages.push(...resp.images);
+          filenames.push(resp.filename);
+        }
+      } catch (e: any) {
+        errors++;
+        console.error(`Error procesando ${filename}:`, e);
+      }
     }
+
+    await loading.dismiss();
+    this.busy = false;
+    this.progress = '';
+
+    if (allPasses.length === 0) {
+      await this.toast('No se encontraron tarjetas en ningún PDF', 'danger');
+      return;
+    }
+
+    if (errors > 0) {
+      await this.toast(`${errors} PDF${errors > 1 ? 's' : ''} fallaron, mostrando el resto`, 'warning');
+    }
+
+    const combinedName = filenames.join(' + ') || 'varios.pdf';
+
+    this.router.navigate(['/result'], {
+      state: {
+        filename: combinedName,
+        passes: allPasses,
+        images: allImages,
+      },
+    });
   }
 
   private async toBlob(picked: any): Promise<File> {
-    // El plugin da un blob "raw" con path/uri; en web solo tenemos el File directo.
     if (picked.blob instanceof Blob && picked.name) {
       return new File([picked.blob], picked.name, { type: 'application/pdf' });
     }
-    // Fallback: fetch desde la URI
     const resp = await fetch(picked.path ?? picked.uri);
     const blob = await resp.blob();
     return new File([blob], picked.name ?? 'boarding.pdf', { type: 'application/pdf' });
   }
 
   private async toast(msg: string, color: string) {
-    const t = await this.toastCtrl.create({ message: msg, duration: 3000, color });
+    const t = await this.toastCtrl.create({ message: msg, duration: 4000, color });
     await t.present();
   }
 }

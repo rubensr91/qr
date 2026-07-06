@@ -1,0 +1,85 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="goHome()">
+        <ion-icon name="arrow-back"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+    <ion-title>Mis viajes</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <!-- Loading -->
+  <div *ngIf="loading" class="empty">
+    <ion-spinner></ion-spinner>
+    <p>Cargando viajes…</p>
+  </div>
+
+  <!-- Empty -->
+  <div *ngIf="!loading && trips.length === 0" class="empty">
+    <ion-icon name="airplane-outline" size="large"></ion-icon>
+    <h2>Sin viajes guardados</h2>
+    <p>Sube archivos desde la pantalla principal y guárdalos para verlos aquí.</p>
+    <ion-button (click)="goHome()" fill="outline">
+      <ion-icon name="cloud-upload-outline" slot="start"></ion-icon>
+      Subir archivos
+    </ion-button>
+  </div>
+
+  <!-- Trip list -->
+  <ion-card *ngFor="let trip of trips" (click)="viewTrip(trip)" button>
+    <ion-card-header>
+      <ion-card-subtitle>{{ trip.created_at | date:'medium' }}</ion-card-subtitle>
+      <ion-card-title>{{ trip.trip_name || trip.filename }}</ion-card-title>
+      <ion-badge *ngIf="trip.segments?.length" color="primary">
+        {{ trip.segments!.length }} segmentos
+      </ion-badge>
+    </ion-card-header>
+
+    <ion-card-content>
+      <ion-list lines="none">
+        <ion-item *ngFor="let pass of trip.pass_data.passes">
+          <ion-icon
+            [name]="pass.kind === 'train' ? 'train-outline' : 'airplane-outline'"
+            slot="start"
+            color="primary"
+          ></ion-icon>
+          <ion-label>
+            <h3>{{ labelFor(pass) }}</h3>
+            <p *ngIf="pass.flight_date">{{ pass.flight_date }}</p>
+          </ion-label>
+          <ion-badge slot="end" color="medium">{{ pass.format }}</ion-badge>
+        </ion-item>
+      </ion-list>
+
+      <div class="trip-actions">
+        <ion-button
+          fill="clear"
+          color="medium"
+          size="small"
+          (click)="editTrip(trip); $event.stopPropagation()"
+        >
+          <ion-icon name="create-outline" slot="icon-only"></ion-icon>
+        </ion-button>
+        <ion-button
+          fill="clear"
+          color="secondary"
+          size="small"
+          (click)="goToItinerary(trip); $event.stopPropagation()"
+        >
+          <ion-icon name="sparkles-outline" slot="start"></ion-icon>
+          Itinerario
+        </ion-button>
+        <ion-button
+          fill="clear"
+          color="danger"
+          size="small"
+          (click)="deleteTrip(trip); $event.stopPropagation()"
+        >
+          <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
+        </ion-button>
+      </div>
+    </ion-card-content>
+  </ion-card>
+</ion-content>

@@ -187,6 +187,52 @@ def extract_codes(pdf_path, out_dir):
     return list(results.values())
 
 
+def extract_codes_from_image(image_path, out_dir):
+    """Extrae todos los codigos 2D de una imagen (screenshot, foto, etc.).
+
+    Soporta PNG, JPG, WebP, BMP, TIFF y cualquier formato que PIL pueda abrir.
+
+    Devuelve el mismo formato que extract_codes():
+        [(page_num, fname, b64, texto, formato, origen)]
+    donde page_num es siempre 1 y origen es "screenshot".
+    """
+    try:
+        pil_img = Image.open(image_path).convert("RGB")
+    except Exception as e:
+        print(f"  Error abriendo imagen: {e}")
+        return []
+
+    results = []
+    seen = set()
+    counter = 0
+
+    for hit in _decode(pil_img):
+        if not hit.text:
+            continue
+        if _should_skip(hit.text):
+            print(
+                f"  skipped  [{hit.format.name:<7}]  {hit.text[:60]}  "
+                f"(advertising)"
+            )
+            continue
+        key = (hit.format.name, hit.text)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        counter += 1
+        fname = f"code_p1_{counter}.png"
+        crop = _crop_to_hit(pil_img, hit)
+        _, b64 = _save_png(crop, out_dir, fname)
+
+        print(
+            f"  [{hit.format.name:<7}]  {hit.text[:90]}"
+        )
+        results.append((1, fname, b64, hit.text, hit.format.name, "screenshot"))
+
+    return results
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)

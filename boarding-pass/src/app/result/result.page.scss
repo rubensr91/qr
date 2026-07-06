@@ -21,3 +21,27 @@
   word-break: break-all;
   color: var(--ion-color-medium);
 }
+
+.itinerary-cta {
+  text-align: center;
+  padding: 1rem 1rem 2rem;
+  max-width: 480px;
+  margin: 0 auto;
+
+  p {
+    color: var(--ion-color-medium);
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+  }
+}
+
+.source-file {
+  display: inline-block;
+  background: var(--ion-color-primary);
+  color: white;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}

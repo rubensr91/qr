@@ -6,17 +6,25 @@
       </ion-button>
     </ion-buttons>
     <ion-title>{{ filename }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="saveTrip()" [disabled]="saved || saving">
+        <ion-icon [name]="saved ? 'checkmark-circle' : 'bookmark-outline'" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
 <ion-content>
   <div *ngIf="passes.length === 0" class="empty">
-    <p>No se encontraron tarjetas en este PDF.</p>
+    <p>No se encontraron tarjetas en los archivos seleccionados.</p>
   </div>
 
   <ion-card *ngFor="let pass of passes">
     <ion-card-header>
-      <ion-card-subtitle>Página {{ pass.page }} · {{ pass.format }}</ion-card-subtitle>
+      <ion-card-subtitle>
+        <span *ngIf="pass.sourceFile" class="source-file">{{ pass.sourceFile }}</span>
+        Página {{ pass.page }} · {{ pass.format }}
+      </ion-card-subtitle>
       <ion-card-title>{{ labelFor(pass) }}</ion-card-title>
     </ion-card-header>
 
@@ -51,4 +59,12 @@
       </div>
     </ion-card-content>
   </ion-card>
+
+  <div class="itinerary-cta" *ngIf="savedTripId">
+    <ion-button expand="block" color="secondary" (click)="goToItinerary()">
+      <ion-icon name="sparkles-outline" slot="start"></ion-icon>
+      Crear itinerario
+    </ion-button>
+    <p>Descubre restaurantes, hoteles, lugares históricos y más</p>
+  </div>
 </ion-content>

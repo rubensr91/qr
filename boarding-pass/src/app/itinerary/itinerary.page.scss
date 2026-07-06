@@ -1,0 +1,249 @@
+.state-container {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  max-width: 480px;
+  margin: 0 auto;
+
+  &.error ion-icon { color: var(--ion-color-danger); }
+  &.warning ion-icon { color: var(--ion-color-warning); }
+
+  h2 { margin-top: 1rem; font-size: 1.25rem; }
+  p { color: var(--ion-color-medium); }
+  .sub { font-size: 0.85rem; opacity: 0.7; }
+}
+
+.raw-response {
+  font-family: monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  text-align: left;
+  background: var(--ion-color-light);
+  padding: 1rem;
+  border-radius: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+// --- Hero ---
+
+.hero {
+  padding: 1.5rem 1rem;
+  background: linear-gradient(135deg, var(--ion-color-primary), var(--ion-color-primary-shade));
+  color: white;
+  text-align: center;
+
+  &__destinations {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+
+  &__overview {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    opacity: 0.95;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+}
+
+// --- Section ---
+
+.section {
+  padding: 0.75rem 0.5rem 5rem;
+
+  &__title {
+    font-size: 1.15rem;
+    margin: 0 0 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    ion-icon { font-size: 1.3rem; }
+  }
+
+  &__weather-summary {
+    color: var(--ion-color-medium);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+  }
+}
+
+// --- Weather ---
+
+.weather-grid {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.weather-card {
+  flex: 0 0 auto;
+  min-width: 90px;
+  text-align: center;
+  background: var(--ion-color-light);
+  border-radius: 12px;
+  padding: 0.75rem 0.5rem;
+
+  &__date {
+    font-size: 0.75rem;
+    color: var(--ion-color-medium);
+    text-transform: capitalize;
+    margin-bottom: 0.25rem;
+  }
+
+  &__icon {
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+  }
+
+  &__temps {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+
+    .max { font-weight: 600; color: var(--ion-color-danger); }
+    .min { color: var(--ion-color-primary); }
+  }
+}
+
+// --- Tabs ---
+
+.tabs {
+  margin: 0.5rem 0.5rem;
+  --background: transparent;
+
+  ion-segment-button {
+    --indicator-color: var(--ion-color-primary);
+    --color: var(--ion-color-medium);
+    --color-checked: var(--ion-color-primary);
+    --padding-start: 0.75rem;
+    --padding-end: 0.75rem;
+    min-width: auto;
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+
+    ion-icon { font-size: 1.1rem; margin-bottom: 2px; }
+    ion-label { font-size: 0.7rem; }
+  }
+}
+
+// --- Day cards ---
+
+.day-card {
+  margin-bottom: 1rem;
+
+  &__slot {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+
+    ion-icon { font-size: 1.3rem; margin-top: 2px; flex-shrink: 0; }
+
+    strong { display: block; font-size: 0.85rem; color: var(--ion-color-medium); }
+    p { margin: 0.15rem 0 0; font-size: 0.9rem; line-height: 1.4; }
+  }
+
+  &__meal {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--ion-color-light);
+    font-size: 0.85rem;
+    color: var(--ion-color-success);
+
+    ion-icon { flex-shrink: 0; margin-top: 2px; }
+
+    div {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+  }
+
+  &__activities {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.35rem;
+
+    ion-chip {
+      font-size: 0.7rem;
+      height: auto;
+      padding: 2px 8px;
+      margin: 0;
+    }
+  }
+
+  &__weather {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--ion-color-light);
+    font-size: 0.8rem;
+    color: var(--ion-color-medium);
+  }
+}
+
+// --- Recommendation cards ---
+
+.rec-card {
+  margin-bottom: 0.75rem;
+
+  .tips-list {
+    margin: 0.5rem 0 0;
+    padding-left: 1.25rem;
+    font-size: 0.85rem;
+
+    li {
+      margin-bottom: 0.25rem;
+      color: var(--ion-color-medium);
+    }
+  }
+
+  &.historical {
+    border-left: 3px solid var(--ion-color-tertiary);
+  }
+}
+
+.curiosity {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--ion-color-light);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-style: italic;
+
+  ion-icon { color: var(--ion-color-tertiary); flex-shrink: 0; margin-top: 1px; }
+}
+
+// --- Tips ---
+
+.tips-card {
+  margin-bottom: 0.75rem;
+
+  .tips-list {
+    padding-left: 1.25rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+
+    li {
+      margin-bottom: 0.35rem;
+    }
+  }
+}
+
+// --- Empty ---
+
+.empty-tab {
+  text-align: center;
+  padding: 2rem;
+  color: var(--ion-color-medium);
+}

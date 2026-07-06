@@ -11,6 +11,18 @@ const routes: Routes = [
     loadChildren: () => import('./result/result.module').then( m => m.ResultPageModule)
   },
   {
+    path: 'trips',
+    loadChildren: () => import('./trips/trips.module').then( m => m.TripsPageModule)
+  },
+  {
+    path: 'trip-create',
+    loadChildren: () => import('./trip-create/trip-create.module').then( m => m.TripCreatePageModule)
+  },
+  {
+    path: 'itinerary',
+    loadChildren: () => import('./itinerary/itinerary.module').then( m => m.ItineraryPageModule)
+  },
+  {
     path: '',
     redirectTo: 'home',
     pathMatch: 'full'

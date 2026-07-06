@@ -1,0 +1,257 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="goBack()">
+        <ion-icon name="arrow-back"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+    <ion-title>Itinerario</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <!-- Loading -->
+  <div *ngIf="loading" class="state-container">
+    <ion-spinner name="dots"></ion-spinner>
+    <p>Generando itinerario personalizado con IA…</p>
+    <p class="sub">Consultando clima, buscando recomendaciones…</p>
+  </div>
+
+  <!-- Error -->
+  <div *ngIf="!loading && error && !itinerary" class="state-container error">
+    <ion-icon name="warning-outline" size="large" color="danger"></ion-icon>
+    <h2>Error</h2>
+    <p>{{ error }}</p>
+    <ion-button (click)="goBack()" fill="outline">Volver</ion-button>
+  </div>
+
+  <!-- Error de parseo (respuesta cruda) -->
+  <div *ngIf="!loading && itinerary?.parse_error" class="state-container warning">
+    <ion-icon name="code-outline" size="large" color="warning"></ion-icon>
+    <h2>Respuesta no estructurada</h2>
+    <p class="raw-response">{{ itinerary?.raw_response }}</p>
+    <ion-button (click)="goBack()" fill="outline">Volver</ion-button>
+  </div>
+
+  <!-- Itinerario -->
+  <ng-container *ngIf="!loading && itinerary && !itinerary.parse_error && !itinerary.error">
+    <!-- Resumen del destino -->
+    <div class="hero" *ngIf="itinerary.destination_overview">
+      <div class="hero__destinations">
+        <ion-chip *ngFor="let d of itinerary.meta?.destinations" color="primary" outline>
+          <ion-icon name="location-outline"></ion-icon>
+          <ion-label>{{ d }}</ion-label>
+        </ion-chip>
+      </div>
+      <p class="hero__overview">{{ itinerary.destination_overview }}</p>
+    </div>
+
+    <!-- Clima -->
+    <div class="section" *ngIf="itinerary.weather?.length">
+      <h2 class="section__title">
+        <ion-icon name="partly-sunny-outline"></ion-icon> Clima
+      </h2>
+      <p class="section__weather-summary" *ngIf="itinerary.weather_summary">{{ itinerary.weather_summary }}</p>
+      <div class="weather-grid">
+        <div class="weather-card" *ngFor="let w of itinerary.weather">
+          <div class="weather-card__date">{{ w.date | date:'EEE dd' }}</div>
+          <div class="weather-card__icon">{{ w.condition }}</div>
+          <div class="weather-card__temps">
+            <span class="max">{{ w.temp_max }}°</span>
+            <span class="min">{{ w.temp_min }}°</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <ion-segment [(ngModel)]="activeTab" [value]="activeTab" scrollable="true" class="tabs">
+      <ion-segment-button value="plan">
+        <ion-icon name="calendar-outline"></ion-icon>
+        <ion-label>Plan</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="eat">
+        <ion-icon name="restaurant-outline"></ion-icon>
+        <ion-label>Comer</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="sleep">
+        <ion-icon name="bed-outline"></ion-icon>
+        <ion-label>Dormir</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="visit">
+        <ion-icon name="eye-outline"></ion-icon>
+        <ion-label>Visitar</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="tips">
+        <ion-icon name="bulb-outline"></ion-icon>
+        <ion-label>Tips</ion-label>
+      </ion-segment-button>
+    </ion-segment>
+
+    <!-- PLAN DIARIO -->
+    <div class="section" *ngIf="activeTab === 'plan' && itinerary.daily_itinerary?.length">
+      <ion-card class="day-card" *ngFor="let day of itinerary.daily_itinerary">
+        <ion-card-header>
+          <ion-card-subtitle>Día {{ day.day_number }} — {{ day.date | date:'fullDate' }}</ion-card-subtitle>
+          <ion-card-title *ngIf="day.theme">{{ day.theme }}</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <div class="day-card__slot">
+            <ion-icon name="sunny-outline" color="warning"></ion-icon>
+            <div>
+              <strong>Mañana</strong>
+              <p>{{ day.morning?.description }}</p>
+              <div class="day-card__activities" *ngIf="day.morning?.activities?.length">
+                <ion-chip *ngFor="let a of day.morning.activities" outline>{{ a }}</ion-chip>
+              </div>
+            </div>
+          </div>
+          <div class="day-card__slot">
+            <ion-icon name="sunny-outline" color="primary"></ion-icon>
+            <div>
+              <strong>Tarde</strong>
+              <p>{{ day.afternoon?.description }}</p>
+              <div class="day-card__activities" *ngIf="day.afternoon?.activities?.length">
+                <ion-chip *ngFor="let a of day.afternoon.activities" outline>{{ a }}</ion-chip>
+              </div>
+            </div>
+          </div>
+          <div class="day-card__slot">
+            <ion-icon name="moon-outline" color="tertiary"></ion-icon>
+            <div>
+              <strong>Noche</strong>
+              <p>{{ day.evening?.description }}</p>
+              <div class="day-card__activities" *ngIf="day.evening?.activities?.length">
+                <ion-chip *ngFor="let a of day.evening.activities" outline>{{ a }}</ion-chip>
+              </div>
+            </div>
+          </div>
+          <div class="day-card__meal" *ngIf="day.meal_suggestions">
+            <ion-icon name="restaurant-outline" color="success"></ion-icon>
+            <div>
+              <span *ngIf="day.meal_suggestions.lunch"><strong>Almuerzo:</strong> {{ day.meal_suggestions.lunch }}</span>
+              <span *ngIf="day.meal_suggestions.dinner"><strong>Cena:</strong> {{ day.meal_suggestions.dinner }}</span>
+            </div>
+          </div>
+          <!-- Clima del dia -->
+          <div class="day-card__weather" *ngIf="weatherForDate(day.date) as w">
+            {{ w.condition }} · {{ w.temp_max }}° / {{ w.temp_min }}°
+          </div>
+        </ion-card-content>
+      </ion-card>
+    </div>
+
+    <!-- RESTAURANTES -->
+    <div class="section" *ngIf="activeTab === 'eat' && itinerary.restaurants?.length">
+      <ion-card class="rec-card" *ngFor="let r of itinerary.restaurants">
+        <ion-card-header>
+          <ion-card-title>{{ r.name }}</ion-card-title>
+          <ion-card-subtitle>{{ r.type }} · {{ r.price_range }}</ion-card-subtitle>
+        </ion-card-header>
+        <ion-card-content>
+          <p>{{ r.description }}</p>
+        </ion-card-content>
+      </ion-card>
+    </div>
+
+    <!-- HOTELES -->
+    <div class="section" *ngIf="activeTab === 'sleep' && itinerary.hotels?.length">
+      <ion-card class="rec-card" *ngFor="let h of itinerary.hotels">
+        <ion-card-header>
+          <ion-card-title>{{ h.name }}</ion-card-title>
+          <ion-card-subtitle>{{ h.zone }} · {{ h.price_range }}</ion-card-subtitle>
+        </ion-card-header>
+        <ion-card-content>
+          <p>{{ h.description }}</p>
+          <ion-chip *ngFor="let hl of h.highlights" color="secondary" outline>
+            <ion-label>{{ hl }}</ion-label>
+          </ion-chip>
+        </ion-card-content>
+      </ion-card>
+    </div>
+
+    <!-- LUGARES DE INTERÉS + SITIOS HISTÓRICOS -->
+    <div class="section" *ngIf="activeTab === 'visit'">
+      <!-- Lugares de interés -->
+      <h3 *ngIf="itinerary.places_of_interest?.length">Lugares de interés</h3>
+      <ion-card class="rec-card" *ngFor="let p of itinerary.places_of_interest">
+        <ion-card-header>
+          <ion-card-title>{{ p.name }}</ion-card-title>
+          <ion-card-subtitle>{{ p.type }}</ion-card-subtitle>
+        </ion-card-header>
+        <ion-card-content>
+          <p>{{ p.description }}</p>
+          <ul class="tips-list">
+            <li *ngFor="let t of p.tips">{{ t }}</li>
+          </ul>
+        </ion-card-content>
+      </ion-card>
+
+      <!-- Sitios históricos -->
+      <h3 *ngIf="itinerary.historical_sites?.length">Sitios históricos</h3>
+      <ion-card class="rec-card historical" *ngFor="let h of itinerary.historical_sites">
+        <ion-card-header>
+          <ion-card-title>{{ h.name }}</ion-card-title>
+          <ion-card-subtitle>{{ h.period }}</ion-card-subtitle>
+        </ion-card-header>
+        <ion-card-content>
+          <p>{{ h.description }}</p>
+          <div class="curiosity">
+            <ion-icon name="information-circle-outline"></ion-icon>
+            <span>{{ h.curiosity }}</span>
+          </div>
+        </ion-card-content>
+      </ion-card>
+    </div>
+
+    <!-- TIPS -->
+    <div class="section" *ngIf="activeTab === 'tips'">
+      <ion-card class="tips-card" *ngIf="itinerary.transport_tips?.length">
+        <ion-card-header>
+          <ion-card-title><ion-icon name="bus-outline"></ion-icon> Transporte</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <ul class="tips-list">
+            <li *ngFor="let t of itinerary.transport_tips">{{ t }}</li>
+          </ul>
+        </ion-card-content>
+      </ion-card>
+
+      <ion-card class="tips-card" *ngIf="itinerary.general_tips?.length">
+        <ion-card-header>
+          <ion-card-title><ion-icon name="bulb-outline"></ion-icon> Consejos generales</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <ul class="tips-list">
+            <li *ngFor="let t of itinerary.general_tips">{{ t }}</li>
+          </ul>
+        </ion-card-content>
+      </ion-card>
+
+      <ion-card class="tips-card" *ngIf="itinerary.cultural_notes?.length">
+        <ion-card-header>
+          <ion-card-title><ion-icon name="book-outline"></ion-icon> Notas culturales</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <ul class="tips-list">
+            <li *ngFor="let t of itinerary.cultural_notes">{{ t }}</li>
+          </ul>
+        </ion-card-content>
+      </ion-card>
+    </div>
+
+    <!-- Empty tab -->
+    <div class="empty-tab" *ngIf="activeTab === 'eat' && !itinerary.restaurants?.length">
+      <p>No hay recomendaciones de restaurantes.</p>
+    </div>
+    <div class="empty-tab" *ngIf="activeTab === 'sleep' && !itinerary.hotels?.length">
+      <p>No hay recomendaciones de hoteles.</p>
+    </div>
+    <div class="empty-tab" *ngIf="activeTab === 'visit' && !itinerary.places_of_interest?.length && !itinerary.historical_sites?.length">
+      <p>No hay recomendaciones de lugares para visitar.</p>
+    </div>
+    <div class="empty-tab" *ngIf="activeTab === 'tips' && !itinerary.transport_tips?.length && !itinerary.general_tips?.length && !itinerary.cultural_notes?.length">
+      <p>No hay tips disponibles.</p>
+    </div>
+  </ng-container>
+</ion-content>

@@ -1,6 +1,6 @@
 .hero {
   text-align: center;
-  padding: 3rem 1.5rem;
+  padding: 2rem 1.5rem;
   max-width: 480px;
   margin: 0 auto;
 }
@@ -15,4 +15,29 @@
 .hero p {
   color: var(--ion-color-medium);
   margin-bottom: 2rem;
+}
+.primary-cta {
+  margin-bottom: 0.75rem;
+  --background: var(--ion-color-primary);
+  --background-activated: var(--ion-color-primary-shade);
+  font-weight: 600;
+}
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.25rem 0;
+  color: var(--ion-color-medium);
+  font-size: 0.8rem;
+
+  &::before, &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--ion-color-light);
+  }
+}
+.trips-link {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
 }

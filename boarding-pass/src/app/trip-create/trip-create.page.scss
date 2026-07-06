@@ -1,0 +1,83 @@
+.page {
+  max-width: 600px;
+  margin: 0 auto;
+  padding-bottom: 3rem;
+}
+
+.name-input {
+  margin: 0.5rem;
+  --border-radius: 8px;
+}
+
+.section {
+  padding: 0.75rem 0.5rem;
+
+  &__title {
+    font-size: 1rem;
+    margin: 0 0 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ion-color-dark);
+
+    ion-icon { font-size: 1.2rem; color: var(--ion-color-primary); }
+  }
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.seg-form {
+  padding: 0.5rem 0;
+
+  ion-item {
+    --padding-start: 0;
+    --inner-padding-end: 0;
+    font-size: 0.9rem;
+  }
+}
+
+.add-btn {
+  margin: 0.75rem 0.5rem 0.25rem;
+}
+
+.summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: var(--ion-color-light);
+  border-radius: 8px;
+  font-size: 0.85rem;
+
+  ion-icon { font-size: 1.1rem; flex-shrink: 0; }
+}
+
+.summary-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remove-btn {
+  cursor: pointer;
+  opacity: 0.6;
+
+  &:hover { opacity: 1; }
+}
+
+.save-section {
+  padding: 1rem 0.5rem;
+}

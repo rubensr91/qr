@@ -1,0 +1,158 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="goBack()">
+        <ion-icon name="arrow-back"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+    <ion-title>{{ editTripId ? 'Editar viaje' : 'Nuevo viaje' }}</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div class="page">
+    <!-- Trip Name -->
+    <ion-item class="name-input">
+      <ion-input
+        label="Nombre del viaje"
+        labelPlacement="stacked"
+        placeholder="Ej: París y Disneyland 2026"
+        [(ngModel)]="tripName"
+        [disabled]="!!editTripId"
+      ></ion-input>
+    </ion-item>
+
+    <!-- Archivos -->
+    <div class="section" *ngIf="!editTripId">
+      <h3 class="section__title">
+        <ion-icon name="documents-outline"></ion-icon>
+        Subir archivos (billetes, reservas, capturas…)
+      </h3>
+      <ion-button expand="block" fill="outline" (click)="pickPdfs()" [disabled]="busy">
+        <ion-icon name="cloud-upload-outline" slot="start"></ion-icon>
+        Seleccionar archivos
+      </ion-button>
+
+      <!-- Uploaded files list -->
+      <div class="chip-list" *ngIf="uploadedPdfs().length">
+        <ion-chip *ngFor="let pdf of uploadedPdfs(); let i = index" color="primary">
+          <ion-label>{{ pdf.name }} ({{ pdf.passes.length }} pases)</ion-label>
+          <ion-icon name="close-circle" (click)="removePdf(i)"></ion-icon>
+        </ion-chip>
+      </div>
+    </div>
+
+    <!-- Manual Segments -->
+    <div class="section">
+      <h3 class="section__title">
+        <ion-icon name="add-circle-outline"></ion-icon>
+        Añadir manualmente
+      </h3>
+
+      <ion-accordion-group>
+        <ion-accordion *ngFor="let st of [
+          {type:'flight',label:'Vuelo',icon:'airplane'},
+          {type:'train',label:'Tren',icon:'train'},
+          {type:'hotel',label:'Hotel',icon:'bed'},
+          {type:'car',label:'Coche',icon:'car'},
+          {type:'restaurant',label:'Restaurante',icon:'restaurant'},
+          {type:'activity',label:'Actividad',icon:'football'}
+        ]" [value]="openFormType === st.type ? st.type : ''">
+          <ion-item slot="header" (click)="toggleForm(st.type)" button>
+            <ion-icon [name]="st.icon + '-outline'" slot="start" color="primary"></ion-icon>
+            <ion-label>{{ st.label }}</ion-label>
+          </ion-item>
+
+          <div slot="content" class="seg-form">
+            <!-- Flight -->
+            <ng-container *ngIf="st.type === 'flight'">
+              <ion-item><ion-input label="Aerolínea" placeholder="IB, VY, FR…" [(ngModel)]="flightForm.airline"></ion-input></ion-item>
+              <ion-item><ion-input label="Nº vuelo" placeholder="1234" [(ngModel)]="flightForm.flight_number"></ion-input></ion-item>
+              <ion-item><ion-input label="Origen" placeholder="BCN" [(ngModel)]="flightForm.from"></ion-input></ion-item>
+              <ion-item><ion-input label="Destino" placeholder="CDG" [(ngModel)]="flightForm.to"></ion-input></ion-item>
+              <ion-item><ion-input label="Fecha" type="date" [(ngModel)]="flightForm.date"></ion-input></ion-item>
+              <ion-item><ion-input label="Hora" type="time" [(ngModel)]="flightForm.time"></ion-input></ion-item>
+            </ng-container>
+
+            <!-- Train -->
+            <ng-container *ngIf="st.type === 'train'">
+              <ion-item><ion-input label="Operador" placeholder="Renfe, SNCF…" [(ngModel)]="trainForm.operator"></ion-input></ion-item>
+              <ion-item><ion-input label="Nº tren" placeholder="12345" [(ngModel)]="trainForm.train_number"></ion-input></ion-item>
+              <ion-item><ion-input label="Origen" placeholder="Paris" [(ngModel)]="trainForm.from"></ion-input></ion-item>
+              <ion-item><ion-input label="Destino" placeholder="Disneyland" [(ngModel)]="trainForm.to"></ion-input></ion-item>
+              <ion-item><ion-input label="Fecha" type="date" [(ngModel)]="trainForm.date"></ion-input></ion-item>
+              <ion-item><ion-input label="Hora" type="time" [(ngModel)]="trainForm.time"></ion-input></ion-item>
+            </ng-container>
+
+            <!-- Hotel -->
+            <ng-container *ngIf="st.type === 'hotel'">
+              <ion-item><ion-input label="Nombre" placeholder="Hotel Ritz" [(ngModel)]="hotelForm.name"></ion-input></ion-item>
+              <ion-item><ion-input label="Ciudad" placeholder="Paris" [(ngModel)]="hotelForm.city"></ion-input></ion-item>
+              <ion-item><ion-input label="Check-in" type="date" [(ngModel)]="hotelForm.check_in"></ion-input></ion-item>
+              <ion-item><ion-input label="Check-out" type="date" [(ngModel)]="hotelForm.check_out"></ion-input></ion-item>
+            </ng-container>
+
+            <!-- Car -->
+            <ng-container *ngIf="st.type === 'car'">
+              <ion-item><ion-input label="Compañía" placeholder="Hertz, Avis…" [(ngModel)]="carForm.company"></ion-input></ion-item>
+              <ion-item><ion-input label="Ciudad" placeholder="Paris" [(ngModel)]="carForm.city"></ion-input></ion-item>
+              <ion-item><ion-input label="Recogida" type="date" [(ngModel)]="carForm.pickup_date"></ion-input></ion-item>
+              <ion-item><ion-input label="Devolución" type="date" [(ngModel)]="carForm.return_date"></ion-input></ion-item>
+            </ng-container>
+
+            <!-- Restaurant -->
+            <ng-container *ngIf="st.type === 'restaurant'">
+              <ion-item><ion-input label="Nombre" placeholder="Le Jules Verne" [(ngModel)]="restaurantForm.name"></ion-input></ion-item>
+              <ion-item><ion-input label="Ciudad" placeholder="Paris" [(ngModel)]="restaurantForm.city"></ion-input></ion-item>
+              <ion-item><ion-input label="Fecha" type="date" [(ngModel)]="restaurantForm.date"></ion-input></ion-item>
+              <ion-item><ion-input label="Hora" type="time" [(ngModel)]="restaurantForm.time"></ion-input></ion-item>
+            </ng-container>
+
+            <!-- Activity -->
+            <ng-container *ngIf="st.type === 'activity'">
+              <ion-item><ion-input label="Nombre" placeholder="Disneyland Paris" [(ngModel)]="activityForm.name"></ion-input></ion-item>
+              <ion-item><ion-input label="Ciudad" placeholder="Paris" [(ngModel)]="activityForm.city"></ion-input></ion-item>
+              <ion-item><ion-input label="Fecha" type="date" [(ngModel)]="activityForm.date"></ion-input></ion-item>
+              <ion-item><ion-input label="Descripción" placeholder="Entrada 2 parques" [(ngModel)]="activityForm.description"></ion-input></ion-item>
+            </ng-container>
+
+            <ion-button expand="block" size="small" (click)="addSegment(st.type)" class="add-btn">
+              <ion-icon name="add" slot="start"></ion-icon>
+              Añadir {{ st.label }}
+            </ion-button>
+          </div>
+        </ion-accordion>
+      </ion-accordion-group>
+    </div>
+
+    <!-- Summary -->
+    <div class="section" *ngIf="segments().length || uploadedPdfs().length">
+      <h3 class="section__title">
+        <ion-icon name="list-outline"></ion-icon>
+        Resumen del viaje
+      </h3>
+
+      <div class="summary-list">
+        <div class="summary-item" *ngFor="let seg of segments(); let i = index">
+          <ion-icon [name]="segmentIcon(seg.type)" color="primary"></ion-icon>
+          <span class="summary-label">{{ segmentSummary(seg) }}</span>
+          <ion-badge color="medium">{{ segmentLabel(seg.type) }}</ion-badge>
+          <ion-icon name="close-circle" color="danger" (click)="removeSegment(i)" class="remove-btn"></ion-icon>
+        </div>
+        <div class="summary-item" *ngFor="let pdf of uploadedPdfs()">
+          <ion-icon name="document-text"></ion-icon>
+          <span class="summary-label">{{ pdf.name }}</span>
+          <ion-badge color="primary">Archivo · {{ pdf.passes.length }} pases</ion-badge>
+        </div>
+      </div>
+    </div>
+
+    <!-- Save -->
+    <div class="save-section">
+      <ion-button expand="block" size="large" (click)="saveTrip()" [disabled]="busy">
+        <ion-icon name="save-outline" slot="start"></ion-icon>
+        {{ editTripId ? 'Actualizar segmentos' : 'Guardar viaje' }}
+      </ion-button>
+    </div>
+  </div>
+</ion-content>
