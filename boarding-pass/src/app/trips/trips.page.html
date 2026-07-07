@@ -1,85 +1,82 @@
-<ion-header>
+<ion-header class="glass">
   <ion-toolbar>
     <ion-buttons slot="start">
-      <ion-button (click)="goHome()">
+      <ion-button (click)="goHome()" fill="clear">
         <ion-icon name="arrow-back"></ion-icon>
       </ion-button>
     </ion-buttons>
-    <ion-title>Mis viajes</ion-title>
+    <ion-title class="mono">viajes</ion-title>
   </ion-toolbar>
 </ion-header>
 
 <ion-content>
-  <!-- Loading -->
-  <div *ngIf="loading" class="empty">
-    <ion-spinner></ion-spinner>
-    <p>Cargando viajes…</p>
+  <!-- Loading skeleton -->
+  <div *ngIf="loading" class="trip-list">
+    <div class="trip-card pass-stub" *ngFor="let i of [1,2,3]">
+      <div class="skeleton skeleton-line"></div>
+      <div class="skeleton skeleton-line short"></div>
+      <div class="skeleton skeleton-line"></div>
+    </div>
   </div>
 
-  <!-- Empty -->
-  <div *ngIf="!loading && trips.length === 0" class="empty">
-    <ion-icon name="airplane-outline" size="large"></ion-icon>
+  <!-- Empty state -->
+  <div *ngIf="!loading && trips.length === 0" class="empty-state page-enter">
+    <div class="empty-state__icon">
+      <ion-icon name="airplane-outline"></ion-icon>
+    </div>
     <h2>Sin viajes guardados</h2>
     <p>Sube archivos desde la pantalla principal y guárdalos para verlos aquí.</p>
-    <ion-button (click)="goHome()" fill="outline">
+    <ion-button class="primary-cta" (click)="goHome()">
       <ion-icon name="cloud-upload-outline" slot="start"></ion-icon>
       Subir archivos
     </ion-button>
   </div>
 
-  <!-- Trip list -->
-  <ion-card *ngFor="let trip of trips" (click)="viewTrip(trip)" button>
-    <ion-card-header>
-      <ion-card-subtitle>{{ trip.created_at | date:'medium' }}</ion-card-subtitle>
-      <ion-card-title>{{ trip.trip_name || trip.filename }}</ion-card-title>
-      <ion-badge *ngIf="trip.segments?.length" color="primary">
-        {{ trip.segments!.length }} segmentos
-      </ion-badge>
-    </ion-card-header>
+  <!-- Trip list (boarding pass stub cards) -->
+  <div class="trip-list" *ngIf="!loading && trips.length">
+    <div class="trip-card pass-stub page-enter" *ngFor="let trip of trips; let i = index"
+         [style.animation-delay.ms]="i * 50"
+         (click)="viewTrip(trip)">
 
-    <ion-card-content>
-      <ion-list lines="none">
-        <ion-item *ngFor="let pass of trip.pass_data.passes">
-          <ion-icon
-            [name]="pass.kind === 'train' ? 'train-outline' : 'airplane-outline'"
-            slot="start"
-            color="primary"
-          ></ion-icon>
-          <ion-label>
-            <h3>{{ labelFor(pass) }}</h3>
-            <p *ngIf="pass.flight_date">{{ pass.flight_date }}</p>
-          </ion-label>
-          <ion-badge slot="end" color="medium">{{ pass.format }}</ion-badge>
-        </ion-item>
-      </ion-list>
+      <!-- Header: destination + date -->
+      <div class="trip-card__head">
+        <div class="trip-card__title-block">
+          <span class="board-code board-code--md">{{ getOriginCode(trip) }}</span>
+          <div class="flight-strip__line"></div>
+          <span class="board-code board-code--md">{{ getDestCode(trip) }}</span>
+        </div>
+        <h3 class="trip-card__name">{{ trip.trip_name || trip.filename }}</h3>
+        <span class="trip-card__date mono">{{ trip.created_at | date:'mediumDate' }}</span>
+      </div>
 
-      <div class="trip-actions">
-        <ion-button
-          fill="clear"
-          color="medium"
-          size="small"
-          (click)="editTrip(trip); $event.stopPropagation()"
-        >
+      <!-- Pass summary chips -->
+      <div class="trip-card__chips">
+        <span class="chip" *ngFor="let pass of trip.pass_data.passes.slice(0, 3)">
+          <ion-icon [name]="pass.kind === 'train' ? 'train-outline' : 'airplane-outline'"></ion-icon>
+          {{ pass.from || '?' }} → {{ pass.to || '?' }}
+        </span>
+        <span class="chip chip--muted" *ngIf="trip.pass_data.passes.length > 3">
+          +{{ trip.pass_data.passes.length - 3 }}
+        </span>
+        <span class="chip chip--bookings" *ngIf="trip.segments?.length">
+          <ion-icon name="reader-outline"></ion-icon>
+          {{ trip.segments!.length }} reserva{{ trip.segments!.length > 1 ? 's' : '' }}
+        </span>
+      </div>
+
+      <!-- Actions -->
+      <div class="trip-card__actions">
+        <ion-button fill="clear" size="small" (click)="goToItinerary(trip); $event.stopPropagation()">
+          <ion-icon name="sparkles-outline" slot="start"></ion-icon>
+          <span>Itinerario</span>
+        </ion-button>
+        <ion-button fill="clear" size="small" color="medium" (click)="editTrip(trip); $event.stopPropagation()">
           <ion-icon name="create-outline" slot="icon-only"></ion-icon>
         </ion-button>
-        <ion-button
-          fill="clear"
-          color="secondary"
-          size="small"
-          (click)="goToItinerary(trip); $event.stopPropagation()"
-        >
-          <ion-icon name="sparkles-outline" slot="start"></ion-icon>
-          Itinerario
-        </ion-button>
-        <ion-button
-          fill="clear"
-          color="danger"
-          size="small"
-          (click)="deleteTrip(trip); $event.stopPropagation()"
-        >
+        <ion-button fill="clear" size="small" color="danger" (click)="deleteTrip(trip); $event.stopPropagation()">
           <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
         </ion-button>
       </div>
-    </ion-card-content>
-  </ion-card>
+    </div>
+  </div>
 </ion-content>

@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from extraer_qr_pdfs import extract_codes, extract_codes_from_image  # noqa: E402
-from itinerary import generate_itinerary  # noqa: E402
+from itinerary import generate_itinerary, generate_trip_name  # noqa: E402
 from parser import parse_code  # noqa: E402
 
 DB_PATH = Path(__file__).resolve().parent / "trips.db"
@@ -288,10 +288,18 @@ async def create_trip(request: Request, x_session_id: str = Header(default="")):
 
     body = await request.json()
     filename = body.get("filename", "unknown.pdf")
-    trip_name = body.get("trip_name", "")
+    trip_name = body.get("trip_name", "").strip()
     passes = body.get("passes", body.get("pass_data", []))
     images = body.get("images", [])
     segments = body.get("segments", [])
+
+    # Auto-generar nombre si no se proporciono
+    if not trip_name:
+        try:
+            trip_name = generate_trip_name(passes, segments)
+        except Exception as e:
+            print(f"[create_trip] Error generando nombre: {e}")
+            trip_name = filename
 
     new_data = json.dumps({"passes": passes, "images": images}, ensure_ascii=False, sort_keys=True)
     fingerprint = _trip_fingerprint(passes)
@@ -321,6 +329,7 @@ async def create_trip(request: Request, x_session_id: str = Header(default="")):
                 "id": existing["id"],
                 "session_id": sid,
                 "filename": filename,
+                "trip_name": trip_name,
                 "message": "Este viaje ya estaba guardado, sin cambios",
             }
 
@@ -354,6 +363,7 @@ async def create_trip(request: Request, x_session_id: str = Header(default="")):
         "id": trip_id,
         "session_id": sid,
         "filename": filename,
+        "trip_name": trip_name,
         "message": "Viaje guardado",
     }
 
@@ -458,15 +468,17 @@ async def generate_trip_itinerary(trip_id: int, request: Request, x_session_id: 
         conn.close()
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
 
-    # Devolver cache si ya existe
+    # Devolver cache si ya existe (pero no si tiene error de parseo)
     cached = row["itinerary_data"]
     if cached:
-        conn.close()
-        return {
-            "trip_id": trip_id,
-            "cached": True,
-            "itinerary": json.loads(cached),
-        }
+        cached_it = json.loads(cached)
+        if not cached_it.get("parse_error") and not cached_it.get("error"):
+            conn.close()
+            return {
+                "trip_id": trip_id,
+                "cached": True,
+                "itinerary": cached_it,
+            }
 
     pass_data = json.loads(row["pass_data"])
     passes = pass_data.get("passes", [])
@@ -482,14 +494,15 @@ async def generate_trip_itinerary(trip_id: int, request: Request, x_session_id: 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando itinerario: {e}")
 
-    # Guardar en BD
-    conn = _get_db()
-    conn.execute(
-        "UPDATE trips SET itinerary_data = ? WHERE id = ?",
-        (json.dumps(itinerary, ensure_ascii=False), trip_id),
-    )
-    conn.commit()
-    conn.close()
+    # Guardar en BD (solo si no tiene errores)
+    if not itinerary.get("parse_error") and not itinerary.get("error"):
+        conn = _get_db()
+        conn.execute(
+            "UPDATE trips SET itinerary_data = ? WHERE id = ?",
+            (json.dumps(itinerary, ensure_ascii=False), trip_id),
+        )
+        conn.commit()
+        conn.close()
 
     return {
         "trip_id": trip_id,

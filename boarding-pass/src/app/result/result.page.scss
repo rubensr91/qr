@@ -1,47 +1,212 @@
-.empty {
-  text-align: center;
-  padding: 2rem;
-  color: var(--ion-color-medium);
-}
-.barcode {
-  margin-top: 1rem;
-  text-align: center;
-}
-.barcode img {
-  max-width: 100%;
-  height: auto;
-  background: white;
-  padding: 0.5rem;
-  border: 1px solid var(--ion-color-light);
-  border-radius: 4px;
-}
-.raw {
-  font-family: monospace;
-  font-size: 0.85rem;
-  word-break: break-all;
-  color: var(--ion-color-medium);
-}
-
-.itinerary-cta {
-  text-align: center;
-  padding: 1rem 1rem 2rem;
-  max-width: 480px;
+.pass-list {
+  padding: var(--space-4) var(--space-3) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 560px;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
 
-  p {
-    color: var(--ion-color-medium);
-    font-size: 0.85rem;
-    margin-top: 0.5rem;
+// --- Boarding pass card ---
+.boarding-pass {
+  padding: 0;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.bp-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-soft) 100%);
+  color: var(--paper);
+  position: relative;
+  z-index: 1;
+}
+
+.bp-airline { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.bp-airline__code {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--paper);
+}
+.bp-airline__name {
+  font-size: var(--fs-tiny);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.6;
+}
+
+.bp-class {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+
+  &__label {
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    opacity: 0.5;
+  }
+  .board-code { color: var(--paper); }
+}
+
+.bp-source {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-tiny);
+  opacity: 0.5;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  ion-icon { font-size: 0.9rem; }
+}
+
+// --- Flight strip ---
+.bp-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-5);
+  position: relative;
+  z-index: 1;
+}
+
+.bp-strip__end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 0 auto;
+  &:last-child { align-items: flex-end; }
+}
+
+.bp-strip__line {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 80px;
+
+  .flight-strip__line { width: 100%; }
+}
+
+.bp-strip__label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--navy-muted);
+  margin-top: 4px;
+}
+
+.bp-strip__time {
+  font-size: var(--fs-small);
+  color: var(--navy-soft);
+  font-weight: 500;
+}
+
+// --- Info grid ---
+.bp-info {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  position: relative;
+  z-index: 1;
+}
+
+.bp-info__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.bp-info__label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--navy-muted);
+  font-weight: 500;
+}
+.bp-info__value {
+  font-size: var(--fs-body);
+  color: var(--navy);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// --- Barcode ---
+.bp-barcode {
+  background: var(--paper-soft);
+  padding: var(--space-4) var(--space-5);
+  text-align: center;
+  border-top: 1px dashed var(--paper-line);
+  position: relative;
+  z-index: 1;
+
+  img {
+    max-width: 220px;
+    margin: 0 auto;
+    display: block;
+    background: white;
+    padding: 8px;
+    border-radius: 4px;
   }
 }
+.bp-barcode__hint {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: var(--navy-muted);
+  text-transform: uppercase;
+}
 
-.source-file {
-  display: inline-block;
-  background: var(--ion-color-primary);
-  color: white;
-  font-size: 0.7rem;
-  padding: 1px 6px;
-  border-radius: 4px;
-  margin-right: 0.5rem;
-  vertical-align: middle;
+// --- Raw fallback ---
+.bp-raw {
+  padding: var(--space-4) var(--space-5);
+  font-family: var(--font-mono);
+  font-size: var(--fs-tiny);
+  word-break: break-all;
+  color: var(--navy-muted);
+  background: var(--paper-soft);
+  margin: 0;
+}
+
+// --- Empty state ---
+.empty-state {
+  text-align: center;
+  padding: var(--space-12) var(--space-6);
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  &__icon {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: var(--paper-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--space-5);
+
+    ion-icon { font-size: 2.5rem; color: var(--teal); }
+  }
+
+  h2 { font-size: var(--fs-h2); font-weight: 600; margin: 0 0 var(--space-2); color: var(--navy); }
+  p { color: var(--navy-muted); margin: 0; line-height: 1.5; }
 }

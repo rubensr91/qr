@@ -76,23 +76,34 @@ export class HomePage {
     this.progress = '';
 
     if (allPasses.length === 0) {
-      await this.toast('No se encontraron tarjetas en ningún PDF', 'danger');
+      await this.toast('No se encontraron tarjetas en ningún archivo', 'danger');
       return;
     }
 
     if (errors > 0) {
-      await this.toast(`${errors} PDF${errors > 1 ? 's' : ''} fallaron, mostrando el resto`, 'warning');
+      await this.toast(`${errors} archivo${errors > 1 ? 's' : ''} fallaron, mostrando el resto`, 'warning');
     }
 
     const combinedName = filenames.join(' + ') || 'varios.pdf';
 
-    this.router.navigate(['/result'], {
-      state: {
-        filename: combinedName,
-        passes: allPasses,
-        images: allImages,
-      },
-    });
+    // Guardar viaje y navegar a Mis viajes
+    try {
+      const resp = await firstValueFrom(
+        this.svc.saveTrip(combinedName, allPasses, allImages),
+      );
+      await this.toast('Viaje guardado', 'success');
+      this.router.navigate(['/trips']);
+    } catch (e: any) {
+      // Si falla el guardado, mostrar resultado igual
+      await this.toast('Error al guardar: ' + (e?.error?.detail ?? e?.message ?? e), 'danger');
+      this.router.navigate(['/result'], {
+        state: {
+          filename: combinedName,
+          passes: allPasses,
+          images: allImages,
+        },
+      });
+    }
   }
 
   private async toBlob(picked: any): Promise<File> {

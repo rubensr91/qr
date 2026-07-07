@@ -85,6 +85,7 @@ export interface SaveTripResponse {
   id: number;
   session_id: string;
   filename: string;
+  trip_name?: string;
   message: string;
 }
 

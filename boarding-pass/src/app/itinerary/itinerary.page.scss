@@ -1,249 +1,420 @@
+// --- State containers ---
 .state-container {
   text-align: center;
-  padding: 3rem 1.5rem;
-  max-width: 480px;
+  padding: var(--space-12) var(--space-6);
+  max-width: 420px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 
-  &.error ion-icon { color: var(--ion-color-danger); }
-  &.warning ion-icon { color: var(--ion-color-warning); }
+  ion-icon { font-size: 3rem; color: var(--teal); margin-bottom: var(--space-3); }
+  h2 { font-size: var(--fs-h2); font-weight: 600; margin: 0 0 var(--space-2); color: var(--navy); }
+  p { color: var(--navy-muted); margin: 0 0 var(--space-4); line-height: 1.5; }
 
-  h2 { margin-top: 1rem; font-size: 1.25rem; }
-  p { color: var(--ion-color-medium); }
-  .sub { font-size: 0.85rem; opacity: 0.7; }
+  &.error ion-icon { color: var(--coral); }
 }
 
-.raw-response {
-  font-family: monospace;
-  font-size: 0.8rem;
-  white-space: pre-wrap;
-  text-align: left;
-  background: var(--ion-color-light);
-  padding: 1rem;
-  border-radius: 8px;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-// --- Hero ---
-
+// --- Editorial hero ---
 .hero {
-  padding: 1.5rem 1rem;
-  background: linear-gradient(135deg, var(--ion-color-primary), var(--ion-color-primary-shade));
-  color: white;
+  padding: var(--space-6) var(--space-5);
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(13, 115, 119, 0.08) 0%, transparent 60%),
+    var(--paper);
+  color: var(--navy);
   text-align: center;
+  position: relative;
+  z-index: 1;
+  border-bottom: 1px solid var(--paper-line);
+
+  &__strip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    opacity: 0.6;
+    .flight-strip__line { flex: 1; }
+  }
 
   &__destinations {
     display: flex;
     justify-content: center;
-    gap: 0.5rem;
+    gap: var(--space-2);
     flex-wrap: wrap;
-    margin-bottom: 0.75rem;
+    margin-bottom: var(--space-3);
+
+    ion-chip {
+      --background: var(--paper);
+      --color: var(--navy);
+      border: 1px solid var(--paper-line);
+      font-weight: 500;
+      font-size: var(--fs-tiny);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
   }
 
   &__overview {
-    font-size: 0.95rem;
-    line-height: 1.5;
-    opacity: 0.95;
+    font-size: var(--fs-body);
+    line-height: 1.6;
+    color: var(--navy-soft);
     max-width: 600px;
     margin: 0 auto;
+    font-style: italic;
   }
 }
 
 // --- Section ---
-
 .section {
-  padding: 0.75rem 0.5rem 5rem;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+  max-width: 720px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
 
   &__title {
-    font-size: 1.15rem;
-    margin: 0 0 0.75rem;
+    font-size: var(--fs-tiny);
+    font-weight: 600;
+    margin: 0 0 var(--space-3);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-2);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--navy-muted);
 
-    ion-icon { font-size: 1.3rem; }
+    ion-icon { font-size: 1rem; }
   }
 
   &__weather-summary {
-    color: var(--ion-color-medium);
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
+    color: var(--navy-soft);
+    font-size: var(--fs-body);
+    margin-bottom: var(--space-4);
+    line-height: 1.5;
+    font-style: italic;
   }
 }
 
-// --- Weather ---
-
+// --- Weather strip ---
 .weather-grid {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
   overflow-x: auto;
-  padding-bottom: 0.5rem;
+  padding: 0 var(--space-1) var(--space-2);
   -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+
+  > * { scroll-snap-align: start; }
 }
 
 .weather-card {
   flex: 0 0 auto;
-  min-width: 90px;
+  min-width: 100px;
   text-align: center;
-  background: var(--ion-color-light);
-  border-radius: 12px;
-  padding: 0.75rem 0.5rem;
+  background: var(--paper-soft);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--paper-line);
 
   &__date {
-    font-size: 0.75rem;
-    color: var(--ion-color-medium);
-    text-transform: capitalize;
-    margin-bottom: 0.25rem;
+    font-size: var(--fs-tiny);
+    color: var(--navy-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
   }
 
-  &__icon {
-    font-size: 0.8rem;
-    margin-bottom: 0.25rem;
-  }
+  &__icon { font-size: var(--fs-body); margin: 2px 0; }
 
   &__temps {
     display: flex;
     justify-content: center;
-    gap: 0.5rem;
-    font-size: 0.9rem;
+    gap: var(--space-2);
+    font-size: var(--fs-body);
 
-    .max { font-weight: 600; color: var(--ion-color-danger); }
-    .min { color: var(--ion-color-primary); }
+    .max { font-weight: 700; color: var(--coral); }
+    .min { color: var(--teal); font-weight: 500; }
   }
 }
 
 // --- Tabs ---
-
 .tabs {
-  margin: 0.5rem 0.5rem;
+  margin: 0;
+  padding: 0 var(--space-2);
   --background: transparent;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--glass-line);
 
   ion-segment-button {
-    --indicator-color: var(--ion-color-primary);
-    --color: var(--ion-color-medium);
-    --color-checked: var(--ion-color-primary);
-    --padding-start: 0.75rem;
-    --padding-end: 0.75rem;
+    --indicator-color: var(--teal);
+    --color: var(--navy-muted);
+    --color-checked: var(--teal);
+    --padding-start: var(--space-3);
+    --padding-end: var(--space-3);
     min-width: auto;
     flex: 0 0 auto;
-    font-size: 0.8rem;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 500;
+    font-size: var(--fs-small);
 
     ion-icon { font-size: 1.1rem; margin-bottom: 2px; }
-    ion-label { font-size: 0.7rem; }
+    ion-label { font-size: var(--fs-tiny); font-weight: 500; }
   }
 }
 
-// --- Day cards ---
-
+// --- Day cards (timeline) ---
 .day-card {
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
+  background: var(--paper);
+  border-radius: var(--radius);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-1);
+  border: 1px solid var(--paper-line);
+  position: relative;
+  z-index: 1;
+
+  &__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px dashed var(--paper-line);
+  }
+
+  &__day-label {
+    font-size: var(--fs-tiny);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--navy-muted);
+    font-weight: 600;
+  }
+
+  &__date {
+    font-family: var(--font-mono);
+    font-size: var(--fs-tiny);
+    color: var(--navy-soft);
+    font-weight: 500;
+  }
+
+  &__theme {
+    font-size: var(--fs-h3);
+    font-weight: 600;
+    color: var(--navy);
+    margin: 0 0 var(--space-4);
+    letter-spacing: -0.01em;
+  }
 
   &__slot {
     display: flex;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    align-items: flex-start;
 
-    ion-icon { font-size: 1.3rem; margin-top: 2px; flex-shrink: 0; }
+    ion-icon {
+      font-size: 1.25rem;
+      margin-top: 2px;
+      flex-shrink: 0;
+      padding: 4px;
+      background: var(--paper-soft);
+      border-radius: 6px;
+    }
 
-    strong { display: block; font-size: 0.85rem; color: var(--ion-color-medium); }
-    p { margin: 0.15rem 0 0; font-size: 0.9rem; line-height: 1.4; }
+    strong {
+      display: block;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--navy-muted);
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    p { margin: 0; font-size: var(--fs-body); line-height: 1.4; color: var(--navy-soft); }
   }
 
   &__meal {
     display: flex;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid var(--ion-color-light);
-    font-size: 0.85rem;
-    color: var(--ion-color-success);
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px dashed var(--paper-line);
+    font-size: var(--fs-small);
+    color: var(--teal);
 
     ion-icon { flex-shrink: 0; margin-top: 2px; }
-
-    div {
-      display: flex;
-      flex-direction: column;
-      gap: 0.15rem;
-    }
+    div { display: flex; flex-direction: column; gap: var(--space-1); width: 100%; }
+    strong { color: var(--navy-muted); font-weight: 500; }
   }
 
   &__activities {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
-    margin-top: 0.35rem;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
 
     ion-chip {
-      font-size: 0.7rem;
+      font-size: 9px;
       height: auto;
       padding: 2px 8px;
       margin: 0;
+      background: var(--paper-soft);
+      color: var(--navy-soft);
+      border: 1px solid var(--paper-line);
+      text-transform: none;
+      letter-spacing: 0;
+      font-weight: 500;
     }
   }
 
   &__weather {
-    margin-top: 0.5rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid var(--ion-color-light);
-    font-size: 0.8rem;
-    color: var(--ion-color-medium);
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px dashed var(--paper-line);
+    font-size: var(--fs-tiny);
+    color: var(--navy-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
   }
 }
 
 // --- Recommendation cards ---
-
 .rec-card {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
+  background: var(--paper);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-1);
+  border: 1px solid var(--paper-line);
+  position: relative;
+  z-index: 1;
 
   .tips-list {
-    margin: 0.5rem 0 0;
-    padding-left: 1.25rem;
-    font-size: 0.85rem;
+    margin: var(--space-2) 0 0;
+    padding-left: var(--space-5);
+    font-size: var(--fs-small);
 
     li {
-      margin-bottom: 0.25rem;
-      color: var(--ion-color-medium);
+      margin-bottom: var(--space-1);
+      color: var(--navy-soft);
     }
   }
 
   &.historical {
-    border-left: 3px solid var(--ion-color-tertiary);
+    border-left: 3px solid var(--amber);
   }
 }
 
 .curiosity {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-  padding: 0.5rem;
-  background: var(--ion-color-light);
-  border-radius: 8px;
-  font-size: 0.85rem;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  background: var(--amber-soft);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-small);
   font-style: italic;
+  color: var(--navy);
 
-  ion-icon { color: var(--ion-color-tertiary); flex-shrink: 0; margin-top: 1px; }
+  ion-icon { color: var(--amber); flex-shrink: 0; margin-top: 1px; }
 }
 
 // --- Tips ---
-
 .tips-card {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
+  background: var(--paper);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-1);
+  border: 1px solid var(--paper-line);
+  position: relative;
+  z-index: 1;
 
   .tips-list {
-    padding-left: 1.25rem;
-    font-size: 0.9rem;
-    line-height: 1.5;
+    padding-left: var(--space-5);
+    font-size: var(--fs-body);
+    line-height: 1.6;
+    color: var(--navy-soft);
 
-    li {
-      margin-bottom: 0.35rem;
-    }
+    li { margin-bottom: var(--space-2); }
   }
 }
 
-// --- Empty ---
+// --- Pass card (tarjetas tab) ---
+.pass-card {
+  margin-bottom: var(--space-3);
+  background: var(--paper);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-1);
+  border: 1px solid var(--paper-line);
+  position: relative;
+  z-index: 1;
+}
+
+.source-file {
+  display: inline-block;
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: var(--fs-tiny);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: var(--space-2);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+// --- Segments list (reservas tab) ---
+.summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--paper);
+  border-radius: var(--radius);
+  font-size: var(--fs-body);
+  border: 1px solid var(--paper-line);
+  position: relative;
+  z-index: 1;
+
+  ion-icon { font-size: 1.2rem; flex-shrink: 0; color: var(--teal); }
+}
+
+.summary-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--navy);
+  font-weight: 500;
+}
+
+.edit-segments-btn {
+  margin-top: var(--space-2);
+  --border-radius: 12px;
+}
 
 .empty-tab {
   text-align: center;
-  padding: 2rem;
-  color: var(--ion-color-medium);
+  padding: var(--space-10) var(--space-4);
+  color: var(--navy-muted);
+  font-size: var(--fs-body);
+  font-style: italic;
 }

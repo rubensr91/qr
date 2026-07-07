@@ -256,6 +256,7 @@ def _build_itinerary_prompt(passes: list[dict], segments: list[dict], weather: l
 - Fechas: {date_range}
 - Dias a planificar: {num_days} dias
 - Lista de fechas exactas: {dates_list}
+- FORMATO DE FECHAS: TODAS las fechas en este prompt usan formato ISO AÑO-MES-DIA (YYYY-MM-DD). Ej: 2025-12-31 = 31 de diciembre de 2025, 2026-01-12 = 12 de enero de 2026. No confundas mes con dia.
 
 === VUELOS / LOGISTICA DE TRANSPORTE ===
 {flight_info or "No disponible de momento. Asume flexibilidad completa de horarios."}
@@ -277,89 +278,113 @@ def _build_itinerary_prompt(passes: list[dict], segments: list[dict], weather: l
 
 === INSTRUCCIONES DE CONTENIDO OBLIGATORIAS ===
 1. REALISMO ABSOLUTO: Todos los nombres de hoteles, restaurantes, museos y lugares de interes DEBEN existir en la realidad. Esta prohibido inventar o alucinar nombres. Si el usuario ya tiene hotel/reservas, NO sugieras otros para esos dias, integra los existentes.
-2. IDIOMAS: Los nombres propios de lugares, calles, hoteles y restaurantes deben ir en su idioma original o de uso local. Los consejos, descripciones y notas culturales deben estar en perfecto español.
-3. LOGISTICA DE VUELOS Y HOTELES: 
-   - El Dia 1 DEBE adaptarse al horario de llegada. Si el transporte llega tarde, la mañana/tarde debe marcarse como "En transito".
-   - El Ultimo Dia DEBE adaptarse al horario de salida. No programes actividades tarde si el transporte sale por la mañana.
-   - Si hay hoteles especificados, el check-in/check-out DEBE reflejarse en el daily_itinerary.
-4. CONSISTENCIA: Los hoteles, restaurantes y actividades YA RESERVADOS deben aparecer integrados en el daily_itinerary. No sugieras alternativas para dias donde ya hay algo reservado.
-5. CANTIDADES: Genera exactamente entre 3 y 4 hoteles (si no hay ya reservados), 4 y 6 restaurantes, 5 y 8 lugares de interes, y 2 y 4 sitios historicos.
-6. MULTI-CIUDAD: Si el viaje incluye varias ciudades, el daily_itinerary debe reflejar los desplazamientos entre ellas.
+2. IDIOMAS: Nombres propios en idioma local. Consejos y descripciones en español.
+3. LOGISTICA: El Dia 1 se adapta al horario de llegada. El ultimo dia al de salida. Check-in/check-out de hoteles reflejado en el plan.
+4. CONSISTENCIA: Hoteles, restaurantes y actividades YA RESERVADOS deben integrarse en el daily_itinerary. No sugieras alternativas para dias con reservas.
+5. CANTIDADES: 2-3 hoteles (si no hay reservados), 3-4 restaurantes, 3-5 lugares de interes, 1-2 sitios historicos.
+6. MULTI-CIUDAD: Reflejar desplazamientos entre ciudades en el daily_itinerary.
+7. CONCISION: NADA de parrafos largos. Cada descripcion debe ser UNA frase corta (max 15 palabras). Los tips y curiosidades deben ser telegraficos (max 10 palabras). Las actividades deben ser frases nominales breves (ej: "Visita al Prado", no "Por la mañana visitaremos el Museo del Prado...").
 
 === FORMATO DE SALIDA ===
-Genera UNICAMENTE un objeto JSON estrictamente valido que cumpla con el siguiente esquema. No incluyas explicaciones, no incluyas texto introductorio ni de cierre. El resultado debe ser parseable directamente por un sistema.
+Genera UNICAMENTE un objeto JSON valido. Sin markdown, sin texto adicional.
 
 {{
-  "destination_overview": "Breve descripcion del destino y que esperar de este viaje.",
-  "weather_summary": "Analisis del clima proporcionado y recomendacion de vestimenta.",
+  "destination_overview": "1 frase. Ej: 'Capital vibrante con gran oferta cultural y gastronomica.'",
+  "weather_summary": "1 frase. Ej: 'Calor en agosto, llevar ropa ligera y proteccion solar.'",
   "hotels": [
     {{
-      "name": "Nombre real en idioma local",
-      "zone": "Barrio o zona de la ciudad",
-      "description": "Por que se elige este hotel.",
-      "price_range": "Selecciona uno: €, €€, €€€, €€€€",
-      "highlights": ["Ventaja 1", "Ventaja 2"]
+      "name": "Nombre real",
+      "zone": "Barrio o zona",
+      "description": "1 frase breve",
+      "price_range": "€, €€, €€€ o €€€€",
+      "highlights": ["Punto fuerte 1", "Punto fuerte 2"]
     }}
   ],
   "restaurants": [
     {{
       "name": "Nombre real",
-      "type": "Tipo de cocina (ej: Tradicional, Fusion, Street food)",
-      "description": "Plato recomendado o por que destaca.",
-      "price_range": "Selecciona uno: €, €€, €€€, €€€€"
+      "type": "Tradicional / Fusion / Market / etc",
+      "description": "Plato estrella en 5 palabras",
+      "price_range": "€, €€, €€€ o €€€€"
     }}
   ],
   "places_of_interest": [
     {{
       "name": "Nombre real",
-      "type": "Categoria (ej: Museo, Parque, Mirador)",
-      "description": "Que ver aqui.",
-      "tips": ["Consejo practico de visita o mejor hora."]
+      "type": "Museo / Parque / Mirador / etc",
+      "description": "1 frase",
+      "tips": ["Tip breve max 8 palabras"]
     }}
   ],
   "historical_sites": [
     {{
       "name": "Nombre real",
-      "period": "Epoca historica relevante",
-      "description": "Contexto de su importancia.",
-      "curiosity": "Dato curioso o anecdota historica poco conocida."
+      "period": "Siglo / epoca",
+      "description": "1 frase",
+      "curiosity": "Dato curioso max 10 palabras"
     }}
   ],
   "daily_itinerary": [
     {{
       "day_number": 1,
       "date": "YYYY-MM-DD",
-      "theme": "Enfoque o concepto de este dia (ej: Introduccion al centro historico)",
+      "theme": "Concepto del dia en 5 palabras",
       "morning": {{
-        "activities": ["Actividad 1 o estado de transito", "Actividad 2"],
-        "description": "Detalle del plan matutino."
+        "activities": ["Actividad 1"],
+        "description": "1 frase breve"
       }},
       "afternoon": {{
-        "activities": ["Actividad 1", "Actividad 2"],
-        "description": "Detalle del plan de la tarde."
+        "activities": ["Actividad 1"],
+        "description": "1 frase breve"
       }},
       "evening": {{
-        "activities": ["Actividad 1", "Actividad 2"],
-        "description": "Detalle del plan nocturno."
+        "activities": ["Actividad 1"],
+        "description": "1 frase breve"
       }},
       "meal_suggestions": {{
-        "lunch": "Sugerencia de almuerzo (referenciando un restaurante de la lista o zona)",
-        "dinner": "Sugerencia de cena (referenciando un restaurante de la lista o zona)"
+        "lunch": "Nombre restaurante o zona (5 palabras)",
+        "dinner": "Nombre restaurante o zona (5 palabras)"
       }}
     }}
   ],
-  "transport_tips": ["Consejo 1 sobre como moverse en el destino", "Consejo 2"],
-  "general_tips": ["Consejo de seguridad, dinero o costumbres locales"],
-  "cultural_notes": ["Dato cultural relevante para entender a los locales"]
+  "transport_tips": ["Tip breve max 10 palabras"],
+  "general_tips": ["Tip breve max 10 palabras"],
+  "cultural_notes": ["Nota cultural max 10 palabras"]
 }}
 
 REGLAS OBLIGATORIAS:
 - Responde SOLO el JSON, sin markdown, sin texto adicional.
-- daily_itinerary DEBE tener EXACTAMENTE {num_days} elementos, con estas fechas: {dates_list}.
-- El dia 1 es SIEMPRE el dia de llegada. El ultimo dia es el de salida.
-- Precios en euros (€). Usa categorias: € (economico), €€ (medio), €€€ (alto), €€€€ (lujo)."""
+- daily_itinerary DEBE tener EXACTAMENTE {num_days} elementos: {dates_list}.
+- El dia 1 es llegada. El ultimo dia es salida.
+- SE BREVE. Maximo 15 palabras por descripcion. Maximo 1 actividad por franja horaria.
+- Precios en euros (€). Categorias: € economico, €€ medio, €€€ alto, €€€€ lujo."""
 
     return prompt
+
+
+def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -> str:
+    """Genera un titulo basado en los destinos del viaje: 'Viaje a Sevilla' o 'Viaje a Madrid y Paris'."""
+    if segments is None:
+        segments = []
+
+    flights = [p for p in passes if p.get("kind") == "flight"]
+    seg_hotels = [s for s in segments if s.get("type") == "hotel"]
+
+    dests = []
+    for p in flights:
+        city = _get_city_name(p.get("to", ""))
+        if city and city not in dests:
+            dests.append(city)
+    for s in seg_hotels:
+        city = s.get("city", "")
+        if city and city not in dests:
+            dests.append(city)
+
+    if dests:
+        return f"Viaje a {' y '.join(dests[:3])}"
+    if flights:
+        return f"Viaje a {_get_city_name(flights[0].get('to',''))}"
+    return "Viaje sin destino"
 
 
 def _parse_json_response(content: str) -> dict:
@@ -395,6 +420,26 @@ def _parse_json_response(content: str) -> dict:
         fixed = re.sub(r",(\s*[}\]])", r"\1", text)
         if fixed != text:
             strategies.append((f"{name}-no-trailing-comma", fixed))
+
+    # Estrategia 5: reparar JSON truncado (cerrar llaves/corchetes abiertos)
+    for name, text in list(strategies):
+        if text.endswith(","):
+            text = text[:-1]
+        # Contar aperturas y cierres, añadir los que faltan
+        open_braces = text.count("{") - text.count("}")
+        open_brackets = text.count("[") - text.count("]")
+        if open_braces > 0 or open_brackets > 0:
+            # Cerrar strings abiertos
+            in_string = False
+            fixed_text = list(text)
+            for i, ch in enumerate(text):
+                if ch == '"' and (i == 0 or text[i-1] != '\\'):
+                    in_string = not in_string
+            if in_string:
+                text += '"'
+            text += "]" * max(0, open_brackets)
+            text += "}" * max(0, open_braces)
+            strategies.append((f"{name}-repaired-truncation", text))
 
     # Probar cada estrategia
     last_error = ""
@@ -508,7 +553,7 @@ async def generate_itinerary(passes: list[dict], segments: list[dict] | None = N
                 {"role": "user", "content": prompt},
             ],
             temperature=0.7,
-            max_tokens=4096,
+            max_tokens=16384,
         )
         content = response.choices[0].message.content or ""
         print(f"[deepseek] response length: {len(content)} chars")

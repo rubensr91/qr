@@ -1,34 +1,133 @@
-.empty {
-  text-align: center;
-  padding: 3rem 1.5rem;
-  max-width: 480px;
+.trip-list {
+  padding: var(--space-4) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 640px;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
 }
 
-.empty ion-icon {
-  color: var(--ion-color-medium);
-  margin-bottom: 1rem;
-}
-
-.empty h2 {
-  font-size: 1.25rem;
-  margin-bottom: 0.5rem;
-}
-
-.empty p {
-  color: var(--ion-color-medium);
-  margin-bottom: 1.5rem;
-}
-
-ion-card[button] {
+.trip-card {
   cursor: pointer;
+  padding: var(--space-5) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
-.trip-actions {
+.trip-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.trip-card__title-block {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.trip-card__title-block .flight-strip__line { flex: 1; }
+
+.trip-card__name {
+  margin: 0;
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  color: var(--navy);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.trip-card__date {
+  font-size: var(--fs-tiny);
+  color: var(--navy-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.trip-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: var(--fs-tiny);
+  font-weight: 500;
+  background: var(--paper-soft);
+  color: var(--navy-soft);
+  border: 1px solid var(--paper-line);
+
+  ion-icon { font-size: 0.85rem; }
+}
+.chip--muted { color: var(--navy-muted); font-style: italic; }
+.chip--bookings {
+  background: var(--teal-soft);
+  color: var(--teal);
+  border-color: transparent;
+}
+
+.trip-card__actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--ion-color-light);
+  margin-top: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--paper-line);
+
+  ion-button {
+    --padding-start: 0.5rem;
+    --padding-end: 0.5rem;
+    margin: 0;
+  }
+}
+
+// --- Empty state ---
+.empty-state {
+  text-align: center;
+  padding: var(--space-12) var(--space-6);
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  &__icon {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: var(--paper-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--space-5);
+
+    ion-icon { font-size: 2.5rem; color: var(--teal); }
+  }
+
+  h2 { font-size: var(--fs-h2); font-weight: 600; margin: 0 0 var(--space-2); color: var(--navy); }
+  p { color: var(--navy-muted); margin: 0 0 var(--space-6); line-height: 1.5; }
+}
+
+// --- Skeleton loader ---
+.skeleton {
+  background: linear-gradient(90deg, var(--paper-soft) 0%, var(--paper-line) 50%, var(--paper-soft) 100%);
+  background-size: 200% 100%;
+  border-radius: 6px;
+  animation: skeleton-shimmer 1.5s infinite linear;
+  height: 14px;
+}
+.skeleton-line { width: 100%; }
+.skeleton-line.short { width: 50%; }
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }

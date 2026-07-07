@@ -209,15 +209,8 @@ export class TripCreatePage {
         this.svc.saveTrip(filename, allPasses, allImages, this.tripName.trim(), this.segments()),
       );
 
-      this.router.navigate(['/result'], {
-        state: {
-          filename: resp.filename || filename,
-          passes: allPasses,
-          images: allImages,
-          tripName: this.tripName.trim(),
-          tripId: resp.id,
-        },
-      });
+      await this.toast('Viaje guardado', 'success');
+      this.router.navigate(['/trips']);
     } catch (e: any) {
       this.busy = false;
       this.toast('Error al guardar: ' + (e?.error?.detail ?? e?.message ?? e), 'danger');

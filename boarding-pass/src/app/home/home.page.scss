@@ -1,43 +1,69 @@
 .hero {
   text-align: center;
-  padding: 2rem 1.5rem;
+  padding: clamp(2rem, 8vw, 3.5rem) 1.5rem;
   max-width: 480px;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
 }
-.hero ion-icon {
-  color: var(--ion-color-primary);
-  margin-bottom: 1rem;
-}
-.hero h1 {
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
-}
-.hero p {
-  color: var(--ion-color-medium);
-  margin-bottom: 2rem;
-}
-.primary-cta {
-  margin-bottom: 0.75rem;
-  --background: var(--ion-color-primary);
-  --background-activated: var(--ion-color-primary-shade);
-  font-weight: 600;
-}
-.or-divider {
+
+.hero__strip {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin: 1.25rem 0;
-  color: var(--ion-color-medium);
-  font-size: 0.8rem;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+  padding: 0 var(--space-4);
+  opacity: 0.45;
+}
+.hero__strip .flight-strip__line { flex: 1; }
+
+.hero__title {
+  font-size: var(--fs-hero);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  margin: 0 0 var(--space-4);
+
+  em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--teal) 0%, var(--teal-light) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+}
+
+.hero__sub {
+  font-size: var(--fs-body);
+  color: var(--navy-muted);
+  line-height: 1.5;
+  margin: 0 0 var(--space-8);
+}
+
+.hero__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-6) 0;
+  color: var(--navy-muted);
+  font-size: var(--fs-tiny);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 500;
 
   &::before, &::after {
     content: '';
     flex: 1;
     height: 1px;
-    background: var(--ion-color-light);
+    background: var(--paper-line);
   }
 }
-.trips-link {
-  margin-top: 0.5rem;
-  font-size: 0.9rem;
+
+ion-button[fill="clear"] .mono {
+  font-size: var(--fs-small);
+  letter-spacing: 0;
+  text-transform: lowercase;
+  color: var(--navy-muted);
 }

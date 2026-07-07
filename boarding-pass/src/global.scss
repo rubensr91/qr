@@ -35,3 +35,273 @@
 /* @import "@ionic/angular/css/palettes/dark.always.css"; */
 /* @import "@ionic/angular/css/palettes/dark.class.css"; */
 @import "@ionic/angular/css/palettes/dark.system.css";
+
+/* =========================================================
+   EDITORIAL TRAVEL THEME — global tokens
+   ========================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  // ---- Brand palette: warm paper-white + aviation navy ----
+  --paper:        #faf8f5;
+  --paper-soft:   #f4ede4;
+  --paper-line:   #e8e1d4;
+  --navy:         #0f2942;
+  --navy-soft:    #2a4660;
+  --navy-muted:   #5a6b7e;
+
+  --teal:         #0d7377;
+  --teal-light:   #14a098;
+  --teal-soft:    #d4eaea;
+
+  --coral:        #e85d4d;
+  --coral-soft:   #fae0db;
+
+  --amber:        #d97706;
+  --amber-soft:   #fef3c7;
+
+  --success:      #14b8a6;
+  --success-soft: #d1fae5;
+
+  // ---- Typography ----
+  --font-sans:    'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
+  --fs-hero:      clamp(2rem, 5vw, 2.75rem);
+  --fs-h1:        clamp(1.5rem, 3vw, 1.875rem);
+  --fs-h2:        clamp(1.25rem, 2.5vw, 1.5rem);
+  --fs-h3:        1.125rem;
+  --fs-body:      0.9375rem;
+  --fs-small:     0.8125rem;
+  --fs-tiny:      0.6875rem;
+
+  // ---- Spacing (4px grid) ----
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  // ---- Radii ----
+  --radius-sm: 6px;
+  --radius:    12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  // ---- Shadows (soft, layered) ----
+  --shadow-1: 0 1px 2px rgba(15, 41, 66, 0.04), 0 1px 1px rgba(15, 41, 66, 0.03);
+  --shadow-2: 0 4px 12px rgba(15, 41, 66, 0.06), 0 2px 4px rgba(15, 41, 66, 0.04);
+  --shadow-3: 0 12px 32px rgba(15, 41, 66, 0.08), 0 4px 12px rgba(15, 41, 66, 0.05);
+  --shadow-pop: 0 20px 48px rgba(15, 41, 66, 0.12);
+
+  // ---- Motion ----
+  --ease:        cubic-bezier(0.2, 0, 0, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast:    120ms;
+  --dur:         240ms;
+  --dur-slow:    400ms;
+
+  // ---- Tabular numbers for codes ----
+  --tabular: 'tnum' 1, 'lnum' 1;
+
+  // ---- Glassmorphism ----
+  --glass-bg:    rgba(250, 248, 245, 0.75);
+  --glass-blur:  saturate(180%) blur(20px);
+  --glass-line:  rgba(15, 41, 66, 0.08);
+
+  // ---- Ionic overrides (so ionic components match our palette) ----
+  --ion-color-primary:        var(--teal);
+  --ion-color-primary-rgb:    13, 115, 119;
+  --ion-color-primary-shade:  #0b6163;
+  --ion-color-primary-tint:   #2a8a8e;
+  --ion-color-secondary:      var(--navy);
+  --ion-color-secondary-rgb:  15, 41, 66;
+  --ion-color-secondary-shade:#0a1f33;
+  --ion-color-secondary-tint: #2a4660;
+  --ion-color-danger:         var(--coral);
+  --ion-color-success:        var(--success);
+  --ion-color-warning:        var(--amber);
+  --ion-background-color:     var(--paper);
+  --ion-text-color:           var(--navy);
+  --ion-toolbar-background:   var(--paper);
+  --ion-border-color:         var(--paper-line);
+}
+
+// ---- Dark mode (system) ----
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:        #0e1419;
+    --paper-soft:   #1a2128;
+    --paper-line:   #2a323b;
+    --navy:         #e6e8ef;
+    --navy-soft:    #b8c0cc;
+    --navy-muted:   #9aa3b2;
+    --teal-soft:    #1a3839;
+    --coral-soft:   #3d1d19;
+    --amber-soft:   #3d2e0e;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.2);
+    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.25);
+    --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+    --glass-bg: rgba(14, 20, 25, 0.75);
+  }
+}
+
+// ---- Global editorial typography ----
+body, ion-app, ion-content, ion-item, ion-label, ion-button {
+  font-family: var(--font-sans) !important;
+  font-feature-settings: var(--tabular);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tabular, .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+// ---- Paper background texture (subtle) ----
+ion-content {
+  --background: var(--paper);
+  position: relative;
+}
+ion-content::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(13, 115, 119, 0.03) 0%, transparent 40%),
+    radial-gradient(circle at 80% 80%, rgba(232, 93, 77, 0.02) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+// ---- Glassmorphism toolbar ----
+ion-toolbar.glass, ion-header.glass ion-toolbar {
+  --background: var(--glass-bg);
+  --border-color: var(--glass-line);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+// ---- Boarding-pass-stub with notched edges (clip-path) ----
+.pass-stub {
+  position: relative;
+  background: var(--paper);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-5);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  overflow: hidden;
+}
+.pass-stub::before, .pass-stub::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 24px; height: 24px;
+  background: var(--paper);
+  border-radius: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+}
+.pass-stub::before { left: -12px; box-shadow: 1px 0 0 var(--paper-line); }
+.pass-stub::after  { right: -12px; box-shadow: -1px 0 0 var(--paper-line); }
+.pass-stub:hover { transform: translateY(-2px); box-shadow: var(--shadow-3); }
+
+// ---- Flight strip decoration (origin ●----✈----● destination) ----
+.flight-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--navy);
+}
+.flight-strip__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); flex-shrink: 0; }
+.flight-strip__line {
+  flex: 1;
+  height: 1px;
+  background-image: linear-gradient(to right, var(--navy-muted) 50%, transparent 50%);
+  background-size: 6px 1px;
+  background-repeat: repeat-x;
+  position: relative;
+}
+.flight-strip__line::after {
+  content: '✈';
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.9rem;
+  color: var(--coral);
+  background: var(--paper);
+  padding: 0 4px;
+}
+
+// ---- Departure-board codes (large monospaced for cities, dates) ----
+.board-code {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--navy);
+}
+.board-code--xl { font-size: clamp(1.75rem, 4vw, 2.25rem); }
+.board-code--lg { font-size: 1.5rem; }
+.board-code--md { font-size: 1.125rem; }
+
+// ---- Animated underline on active tabs ----
+ion-segment-button {
+  --indicator-color: var(--teal);
+  --color-checked: var(--teal);
+  --color: var(--navy-muted);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  min-width: auto;
+  font-size: var(--fs-small);
+}
+
+// ---- Primary CTA button (gradient teal) ----
+ion-button.primary-cta {
+  --background: linear-gradient(135deg, var(--teal) 0%, var(--teal-light) 100%);
+  --background-activated: var(--teal);
+  --background-hover: var(--teal-light);
+  --color: white;
+  --border-radius: 14px;
+  --padding-top: 18px;
+  --padding-bottom: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  box-shadow: 0 6px 16px rgba(13, 115, 119, 0.25), 0 2px 4px rgba(13, 115, 119, 0.15);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+ion-button.primary-cta:active {
+  transform: scale(0.98);
+  box-shadow: 0 3px 8px rgba(13, 115, 119, 0.2);
+}
+
+// ---- Page entry animation ----
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.page-enter { animation: fadeUp var(--dur-slow) var(--ease) both; }
+.page-enter-1 { animation-delay: 50ms; }
+.page-enter-2 { animation-delay: 100ms; }
+.page-enter-3 { animation-delay: 150ms; }
+
+// ---- Soft scrollbar (webkit) ----
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--paper-line); border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--navy-muted); }
+
+// ---- Reduced motion ----
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

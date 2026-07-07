@@ -1,13 +1,13 @@
-<ion-header>
+<ion-header class="glass">
   <ion-toolbar>
     <ion-buttons slot="start">
-      <ion-button (click)="goHome()">
+      <ion-button (click)="goHome()" fill="clear">
         <ion-icon name="arrow-back"></ion-icon>
       </ion-button>
     </ion-buttons>
-    <ion-title>{{ filename }}</ion-title>
+    <ion-title class="mono">{{ filename || 'resultado' }}</ion-title>
     <ion-buttons slot="end">
-      <ion-button (click)="saveTrip()" [disabled]="saved || saving">
+      <ion-button (click)="saveTrip()" [disabled]="saved || saving" fill="clear">
         <ion-icon [name]="saved ? 'checkmark-circle' : 'bookmark-outline'" slot="icon-only"></ion-icon>
       </ion-button>
     </ion-buttons>
@@ -15,56 +15,86 @@
 </ion-header>
 
 <ion-content>
-  <div *ngIf="passes.length === 0" class="empty">
+  <div *ngIf="passes.length === 0" class="empty-state page-enter">
+    <div class="empty-state__icon">
+      <ion-icon name="search-outline"></ion-icon>
+    </div>
+    <h2>Sin tarjetas</h2>
     <p>No se encontraron tarjetas en los archivos seleccionados.</p>
   </div>
 
-  <ion-card *ngFor="let pass of passes">
-    <ion-card-header>
-      <ion-card-subtitle>
-        <span *ngIf="pass.sourceFile" class="source-file">{{ pass.sourceFile }}</span>
-        Página {{ pass.page }} · {{ pass.format }}
-      </ion-card-subtitle>
-      <ion-card-title>{{ labelFor(pass) }}</ion-card-title>
-    </ion-card-header>
+  <div class="pass-list" *ngIf="passes.length">
+    <article class="boarding-pass pass-stub page-enter" *ngFor="let pass of passes; let i = index"
+                [style.animation-delay.ms]="i * 60">
 
-    <ion-card-content>
-      <ng-container *ngIf="pass.kind === 'flight'">
-        <ion-grid>
-          <ion-row><ion-col size="4"><b>Pasajero</b></ion-col><ion-col>{{ pass.name }}</ion-col></ion-row>
-          <ion-row><ion-col size="4"><b>PNR</b></ion-col><ion-col>{{ pass.pnr }}</ion-col></ion-row>
-          <ion-row><ion-col size="4"><b>Vuelo</b></ion-col><ion-col>{{ pass.airline }}{{ pass.flight }}</ion-col></ion-row>
-          <ion-row><ion-col size="4"><b>Fecha</b></ion-col><ion-col>{{ pass.flight_date }}</ion-col></ion-row>
-          <ion-row><ion-col size="4"><b>Clase</b></ion-col><ion-col>{{ pass.class }}</ion-col></ion-row>
-          <ion-row><ion-col size="4"><b>Asiento</b></ion-col><ion-col>{{ pass.seat }}</ion-col></ion-row>
-        </ion-grid>
-      </ng-container>
+      <!-- Top header strip: airline + class -->
+      <header class="bp-header">
+        <div class="bp-airline">
+          <span class="bp-airline__code mono">{{ pass.airline || pass.format }}</span>
+          <span class="bp-airline__name">{{ pass.airline ? 'Airline' : pass.format }}</span>
+        </div>
+        <div class="bp-class">
+          <span class="bp-class__label">CLASE</span>
+          <span class="board-code board-code--md">{{ pass.class || '—' }}</span>
+        </div>
+        <div *ngIf="pass.sourceFile" class="bp-source">
+          <ion-icon name="document-attach-outline"></ion-icon>
+          <span>{{ pass.sourceFile }}</span>
+        </div>
+      </header>
 
-      <ng-container *ngIf="pass.kind === 'train'">
-        <ion-grid>
-          <ion-row><ion-col size="4"><b>Localizador</b></ion-col><ion-col>{{ pass.pnr }}</ion-col></ion-row>
-          <ion-row><ion-col size="4"><b>Tren</b></ion-col><ion-col>{{ pass.train }}</ion-col></ion-row>
-          <ion-row><ion-col size="4"><b>Fecha</b></ion-col><ion-col>{{ pass.flight_date }}</ion-col></ion-row>
-          <ion-row><ion-col size="4"><b>Hora</b></ion-col><ion-col>{{ pass.flight_time }}</ion-col></ion-row>
-          <ion-row><ion-col size="4"><b>Clase</b></ion-col><ion-col>{{ pass.class }}</ion-col></ion-row>
-        </ion-grid>
-      </ng-container>
-
-      <ng-container *ngIf="pass.format === 'URL' || pass.format === 'UNKNOWN'">
-        <p class="raw">{{ pass.raw }}</p>
-      </ng-container>
-
-      <div *ngIf="imageFor(pass) as img" class="barcode">
-        <img [src]="'data:image/png;base64,' + img.base64" alt="barcode" />
+      <!-- Flight strip: origin → destination -->
+      <div class="bp-strip">
+        <div class="bp-strip__end">
+          <span class="board-code board-code--xl">{{ pass.from || '???' }}</span>
+          <span class="bp-strip__label">DESDE</span>
+        </div>
+        <div class="bp-strip__line">
+          <div class="flight-strip__line"></div>
+          <span class="bp-strip__time">{{ pass.flight_time || '—' }}</span>
+        </div>
+        <div class="bp-strip__end">
+          <span class="board-code board-code--xl">{{ pass.to || '???' }}</span>
+          <span class="bp-strip__label">HASTA</span>
+        </div>
       </div>
-    </ion-card-content>
-  </ion-card>
 
-  <div class="itinerary-cta" *ngIf="savedTripId">
-    <ion-button expand="block" color="secondary" (click)="goToItinerary()">
-      <ion-icon name="sparkles-outline" slot="start"></ion-icon>
-      Crear itinerario
-    </ion-button>
-    <p>Descubre restaurantes, hoteles, lugares históricos y más</p>
+      <!-- Info grid: passenger, pnr, date, flight, seat -->
+      <div class="bp-info">
+        <div class="bp-info__cell">
+          <span class="bp-info__label">PASAJERO</span>
+          <span class="bp-info__value">{{ pass.name || '—' }}</span>
+        </div>
+        <div class="bp-info__cell">
+          <span class="bp-info__label">PNR / LOCALIZADOR</span>
+          <span class="bp-info__value mono">{{ pass.pnr || '—' }}</span>
+        </div>
+        <div class="bp-info__cell">
+          <span class="bp-info__label">VUELO</span>
+          <span class="bp-info__value mono">{{ pass.airline }}{{ pass.flight }}</span>
+        </div>
+        <div class="bp-info__cell">
+          <span class="bp-info__label">FECHA</span>
+          <span class="bp-info__value mono">{{ pass.flight_date || '—' }}</span>
+        </div>
+        <div class="bp-info__cell">
+          <span class="bp-info__label">TREN</span>
+          <span class="bp-info__value mono">{{ pass.train || '—' }}</span>
+        </div>
+        <div class="bp-info__cell">
+          <span class="bp-info__label">ASIENTO</span>
+          <span class="bp-info__value mono">{{ pass.seat || '—' }}</span>
+        </div>
+      </div>
+
+      <!-- Barcode -->
+      <div *ngIf="imageFor(pass) as img" class="bp-barcode">
+        <img [src]="'data:image/png;base64,' + img.base64" alt="barcode" />
+        <span class="bp-barcode__hint mono">{{ pass.format }}</span>
+      </div>
+
+      <!-- Raw fallback -->
+      <p *ngIf="pass.format === 'URL' || pass.format === 'UNKNOWN'" class="bp-raw">{{ pass.raw }}</p>
+    </article>
   </div>
 </ion-content>

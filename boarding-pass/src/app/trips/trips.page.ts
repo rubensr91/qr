@@ -44,11 +44,13 @@ export class TripsPage {
   }
 
   viewTrip(trip: Trip) {
-    this.router.navigate(['/result'], {
+    this.router.navigate(['/itinerary'], {
       state: {
-        filename: trip.filename,
+        tripId: trip.id,
         passes: trip.pass_data.passes,
         images: trip.pass_data.images,
+        segments: trip.segments || [],
+        tripName: trip.trip_name || trip.filename,
       },
     });
   }
@@ -104,6 +106,19 @@ export class TripsPage {
     this.router.navigate(['/trip-create'], {
       state: { editTripId: trip.id, tripName: trip.trip_name, segments: trip.segments },
     });
+  }
+
+  /** Extrae el código de aeropuerto de origen del primer vuelo. */
+  getOriginCode(trip: Trip): string {
+    const p = trip.pass_data.passes.find(x => x.kind === 'flight');
+    return (p?.from as string) || (trip.trip_name?.match(/\((\w+)\)/)?.[1]) || '—';
+  }
+
+  /** Extrae el código de destino del último vuelo. */
+  getDestCode(trip: Trip): string {
+    const flights = trip.pass_data.passes.filter(x => x.kind === 'flight');
+    const last = flights[flights.length - 1];
+    return (last?.to as string) || '—';
   }
 
   private async toast(msg: string, color: string) {
