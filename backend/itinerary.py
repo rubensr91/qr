@@ -13,7 +13,14 @@ from openai import OpenAI
 
 # --- Configuracion ---
 
-DEEPSEEK_API_KEY = "DEEPSEEK_API_KEY_PLACEHOLDER"
+import os
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 

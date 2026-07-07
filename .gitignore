@@ -70,3 +70,8 @@ yarn-error.log*
 # Variables de entorno
 .env
 .env.local
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
