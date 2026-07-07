@@ -26,6 +26,15 @@ DEEPSEEK_MODEL = "deepseek-chat"
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
+
+def _format_short_date(date_str: str) -> str:
+    """Convierte '2026-12-06' -> '06/12' para nombres de viaje compactos."""
+    try:
+        d = date.fromisoformat(date_str)
+        return d.strftime("%d/%m")
+    except (ValueError, TypeError):
+        return date_str
+
 # Coordenadas de aeropuertos/ciudades comunes para el clima
 CITY_COORDS: dict[str, tuple[float, float]] = {
     "MAD": (40.4168, -3.7038), "BCN": (41.3874, 2.1686),
@@ -85,10 +94,42 @@ AIRPORT_CITY_NAMES: dict[str, str] = {
     "BKK": "Bangkok", "DOH": "Doha", "AUH": "Abu Dabi",
 }
 
+# Normalizacion de ciudades que aparecen escritas enteras en el billete
+# (no como codigo IATA) en PDFs de Renfe/OUIGO
+SPANISH_CITY_ALIASES: dict[str, str] = {
+    "MADRID P.ATOCHA": "Madrid",
+    "MADRID ATOCHA": "Madrid",
+    "MADRID CHAMARTIN": "Madrid",
+    "MADRID PUERTA DE ATOCHA": "Madrid",
+    "BARCELONA SANTS": "Barcelona",
+    "TOLEDO": "Toledo",
+    "SEVILLA SANTA JUSTA": "Sevilla",
+    "VALENCIA JOAQUIN SOROLLA": "Valencia",
+    "MADRID": "Madrid",
+    "BARCELONA": "Barcelona",
+    "SEVILLA": "Sevilla",
+    "VALENCIA": "Valencia",
+    "MALAGA": "Málaga",
+    "BILBAO": "Bilbao",
+    "ZARAGOZA": "Zaragoza",
+    "SANTIAGO": "Santiago de Compostela",
+    "A CORUÑA": "A Coruña",
+    "VIGO": "Vigo",
+    "ALICANTE": "Alicante",
+    "MURCIA": "Murcia",
+}
+
 
 def _get_city_name(code: str) -> str:
     """Convierte codigo de aeropuerto a nombre de ciudad."""
-    return AIRPORT_CITY_NAMES.get(code.upper(), code)
+    if not code:
+        return ""
+    code_upper = code.upper().strip()
+    if code_upper in AIRPORT_CITY_NAMES:
+        return AIRPORT_CITY_NAMES[code_upper]
+    if code_upper in SPANISH_CITY_ALIASES:
+        return SPANISH_CITY_ALIASES[code_upper]
+    return code
 
 
 def _get_coords(code: str) -> tuple[float, float] | None:
@@ -183,12 +224,19 @@ def _build_itinerary_prompt(passes: list[dict], segments: list[dict], weather: l
     seg_restaurants = [s for s in segments if s.get("type") == "restaurant"]
     seg_activities = [s for s in segments if s.get("type") == "activity"]
 
-    # Destinos (de vuelos extraidos + manuales)
+    # Destinos (de vuelos extraidos + manuales + trenes)
     destinations = []
     for p in flights:
         to_city = _get_city_name(p.get("to", ""))
         if to_city and to_city not in destinations:
             destinations.append(to_city)
+    # Trenes: extraer ciudades del campo 'from'/'to' (ej: "MADRID P.ATOCHA", "TOLEDO")
+    for p in trains:
+        for field in ("to", "from"):
+            raw = p.get(field, "")
+            city = _get_city_name(raw)
+            if city and city not in destinations:
+                destinations.append(city)
     for s in seg_flights:
         city = s.get("to_city", s.get("to", ""))
         if city and city not in destinations:
@@ -224,7 +272,9 @@ def _build_itinerary_prompt(passes: list[dict], segments: list[dict], weather: l
 
     # Info de trenes
     for p in trains:
-        flight_info += f"- Tren {p.get('train','')}: PNR {p.get('pnr','')} ({p.get('flight_date','')} {p.get('flight_time','')})\n"
+        from_city = _get_city_name(p.get("from", "")) or p.get("from", "")
+        to_city = _get_city_name(p.get("to", "")) or p.get("to", "")
+        flight_info += f"- Tren {p.get('train','')}: {from_city} → {to_city} (PNR {p.get('pnr','')}, {p.get('flight_date','')} {p.get('flight_time','')})\n"
     for s in seg_trains:
         flight_info += f"- Tren {s.get('operator','')} {s.get('train_number','')}: {s.get('from','')} → {s.get('to','')} ({s.get('date','')} {s.get('time','')})\n"
 
@@ -375,6 +425,7 @@ def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -
         segments = []
 
     flights = [p for p in passes if p.get("kind") == "flight"]
+    trains = [p for p in passes if p.get("kind") == "train"]
     seg_hotels = [s for s in segments if s.get("type") == "hotel"]
 
     dests = []
@@ -382,6 +433,15 @@ def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -
         city = _get_city_name(p.get("to", ""))
         if city and city not in dests:
             dests.append(city)
+    for t in trains:
+        # El barcode de Renfe no trae ciudad, usamos el nº de tren como fallback
+        train = t.get("train", "")
+        date = t.get("flight_date", "")
+        label = f"Tren {train}" if train else "Tren"
+        if date:
+            label += f" {_format_short_date(date)}"
+        if label not in dests:
+            dests.append(label)
     for s in seg_hotels:
         city = s.get("city", "")
         if city and city not in dests:
@@ -391,6 +451,9 @@ def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -
         return f"Viaje a {' y '.join(dests[:3])}"
     if flights:
         return f"Viaje a {_get_city_name(flights[0].get('to',''))}"
+    if trains:
+        train_no = trains[0].get("train", "?")
+        return f"Tren {train_no}"
     return "Viaje sin destino"
 
 
@@ -546,6 +609,16 @@ async def generate_itinerary(passes: list[dict], segments: list[dict] | None = N
                 break
 
     # 3. Generar recomendaciones con DeepSeek
+    # Si no hay API key, devolvemos un itinerario basico (solo clima + estructura)
+    if not DEEPSEEK_API_KEY:
+        print("[itinerary] DEEPSEEK_API_KEY no configurada: devolviendo itinerario basico")
+        basic = _build_basic_itinerary(passes, segments, weather, all_dates, num_days)
+        return {
+            "warning": "Itinerario basico: configura DEEPSEEK_API_KEY para recomendaciones con IA",
+            "weather": weather,
+            **basic,
+        }
+
     prompt = _build_itinerary_prompt(passes, segments, weather, all_dates, num_days)
 
     try:

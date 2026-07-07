@@ -129,10 +129,15 @@ export class BoardingPassService {
 
   /** Guarda un viaje tras la extraccion. */
   saveTrip(filename: string, passes: Pass[], images: BarcodeImage[], tripName?: string, segments?: TravelSegment[]): Observable<SaveTripResponse> {
+    // Forzar Content-Type con charset UTF-8 para que las tildes/ñ se preserven
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json; charset=utf-8',
+      'X-Session-Id': this.getSessionId(),
+    });
     return this.http.post<SaveTripResponse>(
       `${environment.apiUrl}/api/trips`,
       { filename, passes, images, trip_name: tripName || '', segments: segments || [] },
-      this.sessionHeaders(),
+      { headers },
     );
   }
 

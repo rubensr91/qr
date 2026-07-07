@@ -27,6 +27,39 @@
   z-index: 1;
 }
 
+// Cabecera con color distinto para trenes (teal) vs aviones (navy)
+.boarding-pass.bp-train .bp-header {
+  background: linear-gradient(135deg, var(--teal) 0%, var(--teal-light, var(--teal)) 100%);
+}
+.boarding-pass.bp-flight .bp-header {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-soft) 100%);
+}
+
+// Icono redondo en la cabecera
+.bp-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+}
+.bp-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  ion-icon {
+    font-size: 1.5rem;
+    color: var(--paper);
+  }
+  .bp-icon-train { transform: rotate(0deg); }
+}
+
 .bp-airline { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .bp-airline__code {
   font-size: 1.25rem;
@@ -171,6 +204,34 @@
   letter-spacing: 0.15em;
   color: var(--navy-muted);
   text-transform: uppercase;
+}
+
+.bp-source {
+  padding: 6px var(--space-5) var(--space-3);
+  margin: 0;
+  font-size: 9px;
+  color: var(--navy-muted);
+  text-align: right;
+  opacity: 0.6;
+}
+
+// Perforacion lateral (look de boarding pass)
+.bp-perforation {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 8px;
+  width: 1px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--paper-line) 0,
+    var(--paper-line) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  opacity: 0.5;
+  z-index: 2;
+  pointer-events: none;
 }
 
 // --- Raw fallback ---

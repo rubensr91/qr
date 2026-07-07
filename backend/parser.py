@@ -123,11 +123,12 @@ def _parse_renfe(text):
         if 0 <= h <= 23 and 0 <= mn <= 59:
             flight_time = f"{h:02d}:{mn:02d}"
 
-    # 2) Si no habia fecha con slashes, buscar formato compacto MMDDHHMM (QR).
-    #    Cojemos el ULTIMO match valido: en tickets reales el bloque MMDDHHMM
-    #    viene al final, los anteriores suelen ser ruido dentro del bloque
-    #    de digitos del ticket.
+    # 2) Si no habia fecha con slashes, buscar formato MMDD y HHMM.
+    #    En el QR compacto de Renfe la fecha puede estar embebida en una
+    #    cadena de digitos mas larga (ej: "00004 0726 0831 200111").
+    #    Tomamos el ULTIMO candidato valido cerca del localizador.
     if flight_date is None or flight_time is None:
+        # Primero intentamos MMDDHHMM seguido (8 digitos exactos)
         for compact in reversed(list(_RENFE_DATE_COMPACT_RE.finditer(text))):
             mm, dd, hh, mn = (
                 int(compact.group(1)),
@@ -145,6 +146,34 @@ def _parse_renfe(text):
                     flight_time = f"{hh:02d}:{mn:02d}"
                 break
 
+        # Si no se encontro, buscar MMDD y HHMM por separado (sin lookbehind)
+        if flight_date is None or flight_time is None:
+            mmdd_candidates = []
+            for m in re.finditer(r"([01]\d)([0-3]\d)", text):
+                mm, dd = int(m.group(1)), int(m.group(2))
+                if 1 <= mm <= 12 and 1 <= dd <= 31:
+                    mmdd_candidates.append((m.start(), mm, dd))
+
+            for _, mm, dd in reversed(mmdd_candidates):
+                if flight_date is None:
+                    try:
+                        flight_date = date(date.today().year, mm, dd).isoformat()
+                    except ValueError:
+                        pass
+                    break
+
+            if flight_time is None:
+                # Buscar HHMM cerca del MMDD encontrado
+                for pos, mm, dd in mmdd_candidates:
+                    # Buscar HHMM en los siguientes 8 digitos
+                    window = text[pos+4:pos+20] if pos+4 < len(text) else ""
+                    hmm_match = re.search(r"(\d{2})(\d{2})", window)
+                    if hmm_match:
+                        hh, mn = int(hmm_match.group(1)), int(hmm_match.group(2))
+                        if 0 <= hh <= 23 and 0 <= mn <= 59:
+                            flight_time = f"{hh:02d}:{mn:02d}"
+                            break
+
     # 3) Tren + clase + localizador. Cogemos el ULTIMO match (los registros
     #    Aztecs concatenan padding "CNO0000000000..." que no es el localizador
     #    real; el real viene al final).
@@ -155,6 +184,10 @@ def _parse_renfe(text):
 
     # Limpiar ceros de padding al final del localizador
     pnr = train_match["loc"].rstrip("0").rstrip(".")
+
+    # Validacion: sin fecha ni localizador util, el pase es inutil -> descartar
+    if not pnr or not flight_date:
+        return None
 
     return {
         "format": "RENFE",
@@ -172,30 +205,51 @@ def _parse_renfe(text):
 
 # --- Dispatcher -------------------------------------------------------------
 
+def _has_essential_data(parsed):
+    """Comprueba que un pase tiene los datos minimos para ser util.
+    Descarta pases sin fecha o sin localizador/codigo de vuelo."""
+    fmt = parsed.get("format")
+    if fmt in ("URL", "EMPTY", "UNKNOWN"):
+        return False
+    if not parsed.get("flight_date"):
+        return False
+    if fmt == "IATA_BCBP":
+        if not parsed.get("airline") or not parsed.get("flight"):
+            return False
+    if fmt == "RENFE":
+        if not parsed.get("pnr") or not parsed.get("train"):
+            return False
+    return True
+
+
 def parse_code(text, year=None):
     """Detecta el formato y devuelve dict con campos normalizados.
-    Si no reconoce nada, devuelve un dict minimo con solo `raw`."""
+    Devuelve None si el pase no tiene los datos esenciales (fecha, codigo, etc.)
+    para que sea descartado por el caller."""
     if not text or not text.strip():
-        return {"format": "EMPTY", "raw": text or ""}
+        return None
 
     text = text.strip()
 
-    # URLs de publicidad -> "ad" para que el cliente las pueda ocultar.
+    # URLs de publicidad -> descartar (no son billetes)
     if text.lower().startswith(("http://", "https://")):
-        return {"format": "URL", "kind": "advertising", "raw": text}
+        return None
+
+    result = None
 
     # IATA BCBP
     if text.startswith("M1") or text.startswith("M2"):
         result = _parse_iata_bcbp(text, year=year)
-        if result:
-            return result
 
-    # Renfe / OUIGO / Iryo etc. -> si tiene un tren de 5-6 digitos + clase
-    # + localizador, es muy probablemente un ticket de tren. No exigimos
-    # fecha porque el formato QR no la lleva con slashes.
-    if len(text) > 30 and _RENFE_TRAIN_RE.search(text):
+    # Renfe / OUIGO / Iryo etc.
+    if result is None and len(text) > 30 and _RENFE_TRAIN_RE.search(text):
         result = _parse_renfe(text)
-        if result:
-            return result
 
-    return {"format": "UNKNOWN", "raw": text}
+    if result is None:
+        return None
+
+    # Validacion final: descartar si faltan datos esenciales
+    if not _has_essential_data(result):
+        return None
+
+    return result

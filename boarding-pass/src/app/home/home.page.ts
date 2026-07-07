@@ -105,22 +105,13 @@ export class HomePage implements OnInit {
 
     const combinedName = filenames.join(' + ') || 'varios.pdf';
 
-    try {
-      const resp = await firstValueFrom(
-        this.svc.saveTrip(combinedName, allPasses, allImages),
-      );
-      await this.toast('Viaje guardado', 'success');
-      this.router.navigate(['/trips']);
-    } catch (e: any) {
-      await this.toast('Error al guardar: ' + (e?.error?.detail ?? e?.message ?? e), 'danger');
-      this.router.navigate(['/result'], {
-        state: {
-          filename: combinedName,
-          passes: allPasses,
-          images: allImages,
-        },
-      });
-    }
+    // Mostrar resultados YA (flujo directo como en main), guardar en segundo plano
+    this.router.navigate(['/result'], {
+      state: { filename: combinedName, passes: allPasses, images: allImages },
+    });
+    firstValueFrom(this.svc.saveTrip(combinedName, allPasses, allImages))
+      .then(() => console.log('Viaje guardado en segundo plano'))
+      .catch(e => console.error('Error guardando viaje en segundo plano:', e));
   }
 
   private async toBlob(picked: any): Promise<File> {

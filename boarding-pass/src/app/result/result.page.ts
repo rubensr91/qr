@@ -93,6 +93,23 @@ export class ResultPage {
     return pass.format;
   }
 
+  /** Codigo grande que aparece en la cabecera (airline o "RENFE"/"AVANT"). */
+  airlineLabel(pass: Pass): string {
+    if (pass.airline) return pass.airline;
+    if (pass.kind === 'train') return 'TREN';
+    return pass.format || '—';
+  }
+
+  /** Nombre completo del operador (para mostrar debajo del codigo). */
+  airlineName(code: string): string {
+    const names: Record<string, string> = {
+      VY: 'Vueling', IB: 'Iberia', FR: 'Ryanair', AA: 'American Airlines',
+      BA: 'British Airways', LH: 'Lufthansa', AF: 'Air France', KL: 'KLM',
+      U2: 'easyJet', W6: 'Wizz Air', EW: 'Eurowings', TP: 'TAP',
+    };
+    return names[code] || code;
+  }
+
   goHome() {
     this.router.navigate(['/home']);
   }

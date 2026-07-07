@@ -7,7 +7,7 @@ export const environment = {
   // Para navegador local: localhost.
   // Para emulador Android: cambiar a http://10.0.2.2:8765
   // Para dispositivo real: cambiar a http://<IP_LAN>:8765
-  apiUrl: 'http://10.45.7.13:8765',
+  apiUrl: 'http://localhost:8765',
 };
 
 /*

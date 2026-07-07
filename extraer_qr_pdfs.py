@@ -24,6 +24,8 @@ import io
 import os
 import re
 import sys
+import re
+import sys
 
 import fitz
 from PIL import Image
@@ -104,6 +106,11 @@ def extract_codes(pdf_path, out_dir):
     donde origen es "embedded" o "rendered".
     """
     doc = fitz.open(pdf_path)
+    # Extraer campos de texto del PDF (origen, destino, plaza, etc.)
+    # Se hace aqui mismo para evitar abrir el PDF dos veces (fitz falla
+    # con rutas 8.3 / caracteres especiales en Windows al reabrir).
+    text_fields = _extract_text_fields_from_doc(doc)
+
     # Dict para que la version rendered pueda SUSTITUIR a la embedded
     # cuando ambas detectan el mismo codigo (mismo page/format/text).
     results = {}  # (page_num, format_name, text) -> result_tuple
@@ -157,7 +164,7 @@ def extract_codes(pdf_path, out_dir):
                 continue
             if _should_skip(hit.text):
                 # El path rendered tambien puede re-detectar codigos
-                # publicitarios que ya habriamos saltado arriba; lo
+                # publicitarios que ya habiamos saltado arriba; lo
                 # silenciamos para no duplicar el mensaje.
                 continue
             key = (page_num_1based, hit.format.name, hit.text)
@@ -183,8 +190,151 @@ def extract_codes(pdf_path, out_dir):
             crop = _crop_to_hit(page_img, hit)
             results[key] = _save_entry(page_num_1based, crop, hit, "rendered")
 
+    # --- 3. Dedup post-extraccion: Renfe y otros tienen el mismo ticket
+    # en QR (compacto, mal decodificado) y en Aztec (completo). Aqui
+    # parseamos cada resultado y eliminamos los duplicados quedandonos
+    # con el que tenga mas datos. Solo si la extraccion devolvio
+    # algo que se pueda parsear.
+    try:
+        # El parser esta en backend/; anyadimos al path si no esta
+        import sys as _sys
+        _HERE = os.path.dirname(os.path.abspath(__file__))
+        _BACKEND = os.path.join(_HERE, "backend")
+        if os.path.isdir(_BACKEND) and _BACKEND not in _sys.path:
+            _sys.path.insert(0, _BACKEND)
+        from parser import parse_code
+        # Agrupar por (pagina, identificador-de-ticket)
+        groups: dict[tuple, list[tuple]] = {}
+        for tup in results.values():
+            page, fname, b64, text, fmt, origin = tup
+            parsed = parse_code(text)
+            if not parsed:
+                continue
+            # Identificador unico del ticket segun el formato
+            # NO usamos la fecha porque en QR compacto sale mal; usamos
+            # solo (page, tipo, codigo) y descartamos por texto mas largo.
+            if parsed.get("kind") == "train":
+                tid = ("train", parsed.get("train"), parsed.get("pnr"))
+            elif parsed.get("airline"):
+                tid = ("flight", parsed.get("airline"), parsed.get("flight"))
+            else:
+                continue
+            groups.setdefault((page,) + tid, []).append(tup)
+        print(f"  [dedup] {len(groups)} grupos unicos")
+
+        # Para cada grupo, conservar el que tenga el texto mas largo
+        # (mas datos = barcode completo vs compacto) y borrar el resto
+        total_dropped = 0
+        for key, tups in groups.items():
+            if len(tups) <= 1:
+                continue
+            # Ordenar por longitud de texto descendente
+            tups.sort(key=lambda t: len(t[3]), reverse=True)
+            keep = tups[0]
+            for drop in tups[1:]:
+                # Encontrar y borrar la entrada con este filename
+                for k in list(results.keys()):
+                    if results[k] is drop:
+                        del results[k]
+                        # Borrar el archivo PNG
+                        drop_path = os.path.join(out_dir, drop[1])
+                        try:
+                            os.remove(drop_path)
+                        except OSError:
+                            pass
+                        total_dropped += 1
+                        break
+            print(f"  [dedup] p{keep[0]} {key}: kept {keep[1]} (len={len(keep[3])}), dropped {len(tups)-1}")
+        if total_dropped:
+            print(f"  [dedup] total dropped: {total_dropped}")
+    except ImportError as e:
+        print(f"  [dedup] Error import: {e}")
+    except Exception as e:
+        import traceback
+        print(f"  [dedup] Error: {e}")
+        traceback.print_exc()
+
     doc.close()
-    return list(results.values())
+    # Devolvemos (codes, text_fields). codes mantiene la forma antigua
+    # para no romper compatibilidad.
+    return list(results.values()), text_fields
+
+
+def _extract_text_fields_from_doc(doc):
+    """Extrae campos de texto de un fitz.Document ya abierto.
+
+    Devuelve dict {page_num_1based: {from, to, seat, coach, name}}.
+    Funcion auxiliar: separada para poder llamarla con un doc compartido.
+    """
+    fields_by_page = {}
+    for page_num in range(doc.page_count):
+        page = doc[page_num]
+        text = page.get_text()
+        page_fields = {}
+
+        # Origen
+        m = re.search(r"Origen:\s*\n?\s*(.+)", text, re.IGNORECASE)
+        if m:
+            page_fields["from"] = m.group(1).strip()
+
+        # Destino
+        m = re.search(r"Destino:\s*\n?\s*(.+)", text, re.IGNORECASE)
+        if m:
+            page_fields["to"] = m.group(1).strip()
+
+        # Plaza / Asiento
+        m = re.search(r"(?:Plaza|Asiento):\s*\n?\s*(\S+)", text, re.IGNORECASE)
+        if m:
+            page_fields["seat"] = m.group(1).strip()
+
+        # Coche
+        m = re.search(r"Coche:\s*\n?\s*(\S+)", text, re.IGNORECASE)
+        if m:
+            page_fields["coach"] = m.group(1).strip()
+
+        # Nombre del pasajero (varios formatos segun operador)
+        # 1) Etiqueta explicita "Pasajero:", "Titular:", "Nombre:"
+        m = re.search(
+            r"(?:Pasajero|Titular|Nombre):\s*\n?\s*(.+)",
+            text, re.IGNORECASE,
+        )
+        # 2) Formato Renfe/OUIGO: linea "DNI ó DOC.ID:" + DNI + nombre
+        #    El nombre esta justo despues del DNI, en formato "APELLIDO.NOMBRE"
+        if not m:
+            m = re.search(
+                r"DNI\s*[óo]?\s*DOC\.?ID:?\s*\n\s*\*+\S+\s*\n\s*(\S+)",
+                text, re.IGNORECASE,
+            )
+        # 3) Fallback: "Sr. Nombre" o "Sra. Nombre"
+        if not m:
+            m = re.search(r"S(?:r|ra)\.\s+(\S[\S ]+)", text)
+        if m:
+            page_fields["name"] = m.group(1).strip()
+
+        if page_fields:
+            fields_by_page[page_num + 1] = page_fields
+
+    return fields_by_page
+
+
+def extract_text_fields(pdf_path):
+    """Extrae campos de texto del PDF: origen, destino, plaza, coche, nombre.
+
+    Util para Renfe/OUIGO que no llevan esos datos en el codigo de barras.
+    Acepta una ruta de archivo o un objeto fitz.Document ya abierto.
+    Devuelve un dict {page_num_1based: {from, to, seat, coach, name}}.
+    """
+    if isinstance(pdf_path, fitz.Document):
+        return _extract_text_fields_from_doc(pdf_path)
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception as e:
+        import sys as _sys
+        print(f"[extract_text_fields] Error abriendo PDF: {e}", file=_sys.stderr, flush=True)
+        return {}
+    result = _extract_text_fields_from_doc(doc)
+    doc.close()
+    return result
 
 
 def extract_codes_from_image(image_path, out_dir):

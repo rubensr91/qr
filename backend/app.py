@@ -25,9 +25,9 @@ from fastapi.middleware.cors import CORSMiddleware
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from extraer_qr_pdfs import extract_codes, extract_codes_from_image  # noqa: E402
-from itinerary import generate_itinerary, generate_trip_name  # noqa: E402
-from parser import parse_code  # noqa: E402
+from extraer_qr_pdfs import extract_codes, extract_codes_from_image, extract_text_fields  # noqa: E402
+from .itinerary import generate_itinerary, generate_trip_name  # noqa: E402
+from .parser import parse_code  # noqa: E402
 
 DB_PATH = Path(__file__).resolve().parent / "trips.db"
 
@@ -209,22 +209,50 @@ async def extract(file: UploadFile = File(...)):
 
         try:
             if is_image:
-                results = extract_codes_from_image(upload_path, out_dir)
+                image_results = extract_codes_from_image(upload_path, out_dir)
+                results = image_results
+                text_fields = {}
             else:
-                results = extract_codes(upload_path, out_dir)
+                # extract_codes ahora devuelve (codes, text_fields) para
+                # evitar reabrir el PDF (fitz falla con rutas 8.3 / acentos).
+                pdf_codes, text_fields = extract_codes(upload_path, out_dir)
+                results = pdf_codes
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error extrayendo: {e}")
 
     # results = [(page, fname, b64, text, format, origin), ...]
+    # text_fields ya viene dentro del tuple de extract_codes para evitar
+    # reabrir el PDF (fitz/PyMuPDF falla con rutas 8.3 / acentos en Windows).
+
     passes = []
     images = []
+    descartados = 0
     for page, fname, b64, text, fmt, origin in results:
         parsed = parse_code(text)
+        if parsed is None:
+            # Pase descartado por datos incompletos o formato desconocido
+            descartados += 1
+            print(f"[extract] p{page} descartado: {text[:60]!r}")
+            continue
+        # Mezclar campos del texto del PDF (solo si el barcode no los tiene)
+        extras = text_fields.get(page, {})
+        if extras:
+            for key in ("from", "to", "seat", "name"):
+                if key in extras and not parsed.get(key):
+                    parsed[key] = extras[key]
         passes.append({
             "page": page,
             "origin": origin,
             **parsed,
         })
+        images.append({
+            "page": page,
+            "format": fmt,
+            "filename": fname,
+            "base64": b64,
+        })
+    if descartados:
+        print(f"[extract] {descartados} pases descartados por datos incompletos")
         images.append({
             "page": page,
             "format": fmt,

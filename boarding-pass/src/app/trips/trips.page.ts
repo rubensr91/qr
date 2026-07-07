@@ -108,15 +108,25 @@ export class TripsPage {
 
   /** Extrae el código de aeropuerto de origen del primer vuelo. */
   getOriginCode(trip: Trip): string {
-    const p = trip.pass_data.passes.find(x => x.kind === 'flight');
-    return (p?.from as string) || (trip.trip_name?.match(/\((\w+)\)/)?.[1]) || '—';
+    // Primero vuelos
+    const flight = trip.pass_data.passes.find(x => x.kind === 'flight');
+    if (flight?.from) return flight.from as string;
+    // Luego trenes
+    const train = trip.pass_data.passes.find(x => x.kind === 'train' && (x as any).train);
+    if (train) return 'TREN';
+    return (trip.trip_name?.match(/\((\w+)\)/)?.[1]) || '—';
   }
 
-  /** Extrae el código de destino del último vuelo. */
+  /** Extrae el código de destino del último vuelo, o nº de tren si es solo tren. */
   getDestCode(trip: Trip): string {
     const flights = trip.pass_data.passes.filter(x => x.kind === 'flight');
-    const last = flights[flights.length - 1];
-    return (last?.to as string) || '—';
+    if (flights.length) {
+      const last = flights[flights.length - 1];
+      return (last?.to as string) || '—';
+    }
+    const train = trip.pass_data.passes.find(x => x.kind === 'train' && (x as any).train);
+    if (train) return (train as any).train || 'TREN';
+    return '—';
   }
 
   private async toast(msg: string, color: string) {
