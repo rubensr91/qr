@@ -76,3 +76,6 @@ yarn-error.log*
 .env.local
 .env.*.local
 trips.db
+
+# qr_service cache
+qr_service/__pycache__/
