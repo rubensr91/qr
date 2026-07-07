@@ -11,31 +11,36 @@
 
 <ion-content [fullscreen]="true">
   <div class="hero page-enter">
-    <div class="hero__strip">
-      <span class="board-code board-code--lg">BCN</span>
-      <div class="flight-strip__line"></div>
-      <span class="board-code board-code--lg">MAD</span>
-    </div>
-
     <h1 class="hero__title">Tu próximo<br><em>viaje</em> empieza aquí</h1>
     <p class="hero__sub">Sube tus tarjetas, añade reservas y deja que la IA te prepare el itinerario perfecto.</p>
 
-    <ion-button expand="block" class="primary-cta page-enter-1" routerLink="/trip-create">
-      <ion-icon name="add-circle-outline" slot="start"></ion-icon>
-      Crear nuevo viaje
-    </ion-button>
+    <!-- SIN viajes: CTA principal = crear nuevo.  CON viajes: CTA principal = ir a viajes. -->
+    <ng-container *ngIf="!hasTrips; else conViajes">
+      <ion-button expand="block" class="primary-cta page-enter-1" routerLink="/trip-create">
+        <ion-icon name="add-circle-outline" slot="start"></ion-icon>
+        Crear nuevo viaje
+      </ion-button>
 
-    <div class="hero__divider">
-      <span>o rápido</span>
-    </div>
+      <div class="hero__divider">
+        <span>o rápido</span>
+      </div>
 
-    <ion-button expand="block" fill="outline" class="page-enter-2" (click)="pickAndUpload()" [disabled]="busy">
-      <ion-icon name="cloud-upload-outline" slot="start"></ion-icon>
-      {{ busy ? 'Procesando ' + progress + '…' : 'Subir archivos' }}
-    </ion-button>
+      <ion-button expand="block" fill="outline" class="page-enter-2" (click)="pickAndUpload()" [disabled]="busy">
+        <ion-icon name="cloud-upload-outline" slot="start"></ion-icon>
+        {{ busy ? 'Procesando ' + progress + '…' : 'Subir archivos' }}
+      </ion-button>
+    </ng-container>
 
-    <ion-button expand="block" fill="clear" class="page-enter-3" routerLink="/trips">
-      <span class="mono">ver viajes guardados →</span>
-    </ion-button>
+    <ng-template #conViajes>
+      <ion-button expand="block" class="primary-cta page-enter-1" routerLink="/trips">
+        <ion-icon name="briefcase-outline" slot="start"></ion-icon>
+        Ir a mis viajes
+      </ion-button>
+
+      <ion-button expand="block" fill="clear" class="page-enter-2" routerLink="/trip-create">
+        <ion-icon name="add-circle-outline" slot="start"></ion-icon>
+        Crear nuevo viaje
+      </ion-button>
+    </ng-template>
   </div>
 </ion-content>

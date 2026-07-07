@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { LoadingController, ToastController } from '@ionic/angular';
@@ -11,9 +11,10 @@ import { BoardingPassService, ExtractResponse, Pass } from '../services/boarding
   styleUrls: ['home.page.scss'],
   standalone: false,
 })
-export class HomePage {
+export class HomePage implements OnInit {
   busy = false;
   progress = '';
+  hasTrips = false;
 
   constructor(
     private svc: BoardingPassService,
@@ -21,6 +22,25 @@ export class HomePage {
     private loadingCtrl: LoadingController,
     private toastCtrl: ToastController,
   ) {}
+
+  async ngOnInit() {
+    this.refreshHasTrips();
+  }
+
+  /** Llamar al volver a la home (p.ej. despues de borrar el ultimo viaje)
+   *  para que el CTA vuelva al estado "sin viajes". */
+  async ionViewWillEnter() {
+    await this.refreshHasTrips();
+  }
+
+  private async refreshHasTrips() {
+    try {
+      const resp = await firstValueFrom(this.svc.getTrips());
+      this.hasTrips = (resp?.trips?.length ?? 0) > 0;
+    } catch {
+      this.hasTrips = false;
+    }
+  }
 
   async pickAndUpload() {
     let picked: any[] = [];
@@ -57,7 +77,6 @@ export class HomePage {
         const f = await this.toBlob(file);
         const resp = await firstValueFrom(this.svc.uploadPdf(f));
         if (resp) {
-          // Marcar cada pase con el nombre del archivo de origen
           for (const p of resp.passes) {
             p.sourceFile = filename;
           }
@@ -86,7 +105,6 @@ export class HomePage {
 
     const combinedName = filenames.join(' + ') || 'varios.pdf';
 
-    // Guardar viaje y navegar a Mis viajes
     try {
       const resp = await firstValueFrom(
         this.svc.saveTrip(combinedName, allPasses, allImages),
@@ -94,7 +112,6 @@ export class HomePage {
       await this.toast('Viaje guardado', 'success');
       this.router.navigate(['/trips']);
     } catch (e: any) {
-      // Si falla el guardado, mostrar resultado igual
       await this.toast('Error al guardar: ' + (e?.error?.detail ?? e?.message ?? e), 'danger');
       this.router.navigate(['/result'], {
         state: {
