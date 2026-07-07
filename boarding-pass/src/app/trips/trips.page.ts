@@ -97,9 +97,7 @@ export class TripsPage {
   }
 
   goToItinerary(trip: Trip) {
-    this.router.navigate(['/itinerary'], {
-      state: { tripId: trip.id },
-    });
+    this.viewTrip(trip);
   }
 
   editTrip(trip: Trip) {

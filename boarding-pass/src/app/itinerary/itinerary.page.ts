@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { LoadingController, ToastController } from '@ionic/angular';
-import { BoardingPassService, Pass, TravelSegment } from '../services/boarding-pass.service';
+import { BarcodeImage, BoardingPassService, Pass, TravelSegment } from '../services/boarding-pass.service';
 import {
   DailyPlan,
   HistoricalSite,
@@ -22,6 +22,26 @@ const SEGMENT_LABELS: Record<string, string> = {
   car: 'Coche', restaurant: 'Restaurante', activity: 'Actividad',
 };
 
+const AIRLINE_NAMES: Record<string, string> = {
+  IB: 'Iberia', I2: 'Iberia Express', VY: 'Vueling', V7: 'Volotea',
+  FR: 'Ryanair', U2: 'easyJet', W6: 'Wizz Air', EW: 'Eurowings',
+  LH: 'Lufthansa', BA: 'British Airways', AF: 'Air France',
+  KL: 'KLM', AZ: 'ITA Airways', UX: 'Air Europa', NT: 'Binter',
+  AA: 'American Airlines', UA: 'United', DL: 'Delta', AC: 'Air Canada',
+  AM: 'Aeroméxico', LA: 'LATAM', AD: 'Azul', AV: 'Avianca',
+  TP: 'TAP Portugal', SU: 'Aeroflot', TK: 'Turkish Airlines',
+  QR: 'Qatar Airways', EK: 'Emirates', EY: 'Etihad',
+  SQ: 'Singapore Airlines', JL: 'Japan Airlines', NH: 'ANA',
+  AI: 'Air India', QF: 'Qantas',
+  SNCF: 'SNCF', RENFE: 'Renfe', OUIGO: 'OUIGO España',
+  IRYO: 'Iryo', AVE: 'Renfe AVE',
+};
+
+function getAirlineName(code: string | undefined): string {
+  if (!code) return '';
+  return AIRLINE_NAMES[code.toUpperCase()] || code;
+}
+
 @Component({
   selector: 'app-itinerary',
   templateUrl: './itinerary.page.html',
@@ -32,6 +52,7 @@ export class ItineraryPage {
   tripId = 0;
   tripName = '';
   passes: Pass[] = [];
+  images: BarcodeImage[] = [];
   segments: TravelSegment[] = [];
   itinerary: ItineraryData | null = null;
   loading = true;
@@ -49,18 +70,50 @@ export class ItineraryPage {
 
   ionViewWillEnter() {
     const state = history.state as {
-      tripId: number; passes?: Pass[]; segments?: TravelSegment[]; tripName?: string;
+      tripId: number; passes?: Pass[]; segments?: TravelSegment[]; images?: BarcodeImage[]; tripName?: string;
     } | undefined;
     if (state?.tripId) {
       this.tripId = state.tripId;
       this.tripName = state.tripName || '';
-      this.passes = state.passes || [];
-      this.segments = state.segments || [];
-      this.loadItinerary();
+      // Si no nos llegan passes/segments por el state, los pedimos a la API
+      if (state.passes?.length || state.segments?.length) {
+        this.passes = state.passes || [];
+        this.segments = state.segments || [];
+        this.images = state.images || [];
+        this.afterLoad();
+      } else {
+        this.fetchTripData();
+      }
     } else {
       this.error = 'No se recibió el ID del viaje';
       this.loading = false;
     }
+  }
+
+  private afterLoad() {
+    this.activeTab = 'cards';
+    this.loadItinerary();
+  }
+
+  private fetchTripData() {
+    this.loading = true;
+    this.bpSvc.getTrips().subscribe({
+      next: (resp: any) => {
+        const trip = resp.trips.find((t: any) => t.id === this.tripId);
+        if (trip) {
+          this.passes = trip.pass_data.passes || [];
+          this.images = trip.pass_data.images || [];
+          this.segments = trip.segments || [];
+          this.tripName = trip.trip_name || trip.filename;
+        }
+        this.loading = false;
+        this.afterLoad();
+      },
+      error: (err: any) => {
+        this.loading = false;
+        this.error = err?.error?.detail ?? err?.message ?? 'Error';
+      },
+    });
   }
 
   loadItinerary() {
@@ -72,6 +125,10 @@ export class ItineraryPage {
       next: (resp) => {
         this.itinerary = resp.itinerary;
         this.loading = false;
+        // Si hay itinerario, saltar al Plan automaticamente
+        if (resp.itinerary?.daily_itinerary?.length) {
+          this.activeTab = 'plan';
+        }
       },
       error: (err: any) => {
         if (err?.status === 404) {
@@ -110,6 +167,10 @@ export class ItineraryPage {
     return this.itinerary?.weather?.find((w) => w.date === date);
   }
 
+  imageFor(pass: Pass): BarcodeImage | undefined {
+    return this.images.find((i) => i.page === pass.page);
+  }
+
   segmentIcon(type: string): string {
     return SEGMENT_ICONS[type] || 'ellipse';
   }
@@ -138,6 +199,10 @@ export class ItineraryPage {
       return `Tren ${pass.train ?? '?'}`;
     }
     return pass.format || 'Pase';
+  }
+
+  getAirlineName(code: string | undefined): string {
+    return getAirlineName(code);
   }
 
   goBack() {
