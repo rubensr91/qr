@@ -1,9 +1,9 @@
-import { Component, OnInit } from '@angular/core';
+import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { LoadingController, ToastController } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
-import { BoardingPassService, ExtractResponse, Pass } from '../services/boarding-pass.service';
+import { BoardingPassService, Pass } from '../services/boarding-pass.service';
 
 @Component({
   selector: 'app-home',
@@ -11,10 +11,9 @@ import { BoardingPassService, ExtractResponse, Pass } from '../services/boarding
   styleUrls: ['home.page.scss'],
   standalone: false,
 })
-export class HomePage implements OnInit {
+export class HomePage {
   busy = false;
   progress = '';
-  hasTrips = false;
 
   constructor(
     private svc: BoardingPassService,
@@ -22,25 +21,6 @@ export class HomePage implements OnInit {
     private loadingCtrl: LoadingController,
     private toastCtrl: ToastController,
   ) {}
-
-  async ngOnInit() {
-    this.refreshHasTrips();
-  }
-
-  /** Llamar al volver a la home (p.ej. despues de borrar el ultimo viaje)
-   *  para que el CTA vuelva al estado "sin viajes". */
-  async ionViewWillEnter() {
-    await this.refreshHasTrips();
-  }
-
-  private async refreshHasTrips() {
-    try {
-      const resp = await firstValueFrom(this.svc.getTrips());
-      this.hasTrips = (resp?.trips?.length ?? 0) > 0;
-    } catch {
-      this.hasTrips = false;
-    }
-  }
 
   async pickAndUpload() {
     let picked: any[] = [];
