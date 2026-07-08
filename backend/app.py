@@ -230,7 +230,6 @@ async def extract(file: UploadFile = File(...)):
     for page, fname, b64, text, fmt, origin in results:
         parsed = parse_code(text)
         if parsed is None:
-            # Pase descartado por datos incompletos o formato desconocido
             descartados += 1
             print(f"[extract] p{page} descartado: {text[:60]!r}")
             continue
@@ -240,6 +239,11 @@ async def extract(file: UploadFile = File(...)):
             for key in ("from", "to", "seat", "name"):
                 if key in extras and not parsed.get(key):
                     parsed[key] = extras[key]
+        # Descartar si sigue sin origen/destino (inutil como tarjeta)
+        if not parsed.get("from") or not parsed.get("to"):
+            descartados += 1
+            print(f"[extract] p{page} descartado por falta de origen/destino")
+            continue
         passes.append({
             "page": page,
             "origin": origin,
@@ -253,12 +257,6 @@ async def extract(file: UploadFile = File(...)):
         })
     if descartados:
         print(f"[extract] {descartados} pases descartados por datos incompletos")
-        images.append({
-            "page": page,
-            "format": fmt,
-            "filename": fname,
-            "base64": b64,
-        })
 
     return {
         "filename": file.filename,
