@@ -25,7 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from extraer_qr_pdfs import extract_codes, extract_codes_from_image, extract_text_fields  # noqa: E402
+from .qr_client import extract_codes, extract_codes_from_image  # noqa: E402
 from .itinerary import generate_itinerary, generate_trip_name  # noqa: E402
 from .parser import parse_code  # noqa: E402
 
