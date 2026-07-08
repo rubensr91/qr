@@ -33,11 +33,21 @@ DB_PATH = Path(__file__).resolve().parent / "trips.db"
 
 
 def _get_db() -> sqlite3.Connection:
-    """Crea o abre la base de datos SQLite y devuelve una conexion."""
+    """Crea o abre la base de datos SQLite y devuelve una conexion.
+    Si la tabla trips no existe (BD borrada), la recrea automaticamente."""
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    try:
+        conn.execute("SELECT 1 FROM trips LIMIT 1")
+    except sqlite3.OperationalError:
+        conn.close()
+        _init_db()
+        conn = sqlite3.connect(str(DB_PATH))
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 
@@ -303,6 +313,7 @@ def list_trips(request: Request, x_session_id: str = Header(default="")):
         (sid,),
     ).fetchall()
     conn.close()
+
     print(f"[list_trips] found {len(rows)} trips for session {sid}")
 
     trips = []
