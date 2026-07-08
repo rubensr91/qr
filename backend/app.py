@@ -182,6 +182,25 @@ def health():
     return {"status": "ok"}
 
 
+# --- Validacion de pases ---
+
+def _is_pass_complete(pass_data: dict) -> tuple[bool, str]:
+    """Comprueba que un pase tiene todos los datos esenciales.
+    Devuelve (ok, motivo) donde ok=True si es valido."""
+    kind = pass_data.get("kind")
+    if kind not in ("flight", "train"):
+        return False, f"tipo desconocido {kind!r}"
+    if not pass_data.get("pnr") or not pass_data.get("from") or not pass_data.get("to") or not pass_data.get("flight_date"):
+        return False, "faltan pnr/origen/destino/fecha"
+    if kind == "flight":
+        if not pass_data.get("name") or not pass_data.get("airline") or not pass_data.get("flight"):
+            return False, "vuelo sin nombre/aerolinea/numero"
+    if kind == "train":
+        if not pass_data.get("train"):
+            return False, "tren sin numero"
+    return True, ""
+
+
 # --- Extract ---
 
 @app.post("/api/extract")
@@ -239,10 +258,11 @@ async def extract(file: UploadFile = File(...)):
             for key in ("from", "to", "seat", "name"):
                 if key in extras and not parsed.get(key):
                     parsed[key] = extras[key]
-        # Descartar si sigue sin origen/destino (inutil como tarjeta)
-        if not parsed.get("from") or not parsed.get("to"):
+        # Validacion completa: descartar si faltan datos esenciales
+        ok, motivo = _is_pass_complete(parsed)
+        if not ok:
             descartados += 1
-            print(f"[extract] p{page} descartado por falta de origen/destino")
+            print(f"[extract] p{page} descartado: {motivo}")
             continue
         passes.append({
             "page": page,
@@ -318,6 +338,15 @@ async def create_trip(request: Request, x_session_id: str = Header(default="")):
     passes = body.get("passes", body.get("pass_data", []))
     images = body.get("images", [])
     segments = body.get("segments", [])
+
+    # Validar que todos los pases tengan datos completos
+    for p in passes:
+        ok, motivo = _is_pass_complete(p)
+        if not ok:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Pase incompleto rechazado: {motivo}. Re-subir el archivo desde la home.",
+            )
 
     # Auto-generar nombre si no se proporciono
     if not trip_name:
