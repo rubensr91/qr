@@ -19,133 +19,150 @@
     <div class="empty-state__icon">
       <ion-icon name="search-outline"></ion-icon>
     </div>
-    <h2>Sin tarjetas</h2>
-    <p>No se encontraron tarjetas con datos completos en los archivos seleccionados.</p>
+    <h2>Sin billetes</h2>
+    <p>No se encontraron billetes con datos completos en los archivos seleccionados.</p>
   </div>
 
-  <div class="pass-list" *ngIf="passes.length">
-    <article class="boarding-pass pass-stub page-enter"
-             *ngFor="let pass of passes; let i = index"
-             [class.bp-train]="pass.kind === 'train'"
-             [class.bp-flight]="pass.kind === 'flight' || !pass.kind"
-             [style.animation-delay.ms]="i * 60">
+  <div class="bill-list" *ngIf="groups.length">
+    <div class="person-group page-enter" *ngFor="let grp of groups; let i = index"
+         [style.animation-delay.ms]="i * 80">
 
-      <!-- Perforacion izquierda (look de boarding pass) -->
-      <div class="bp-perforation"></div>
-
-      <!-- Header: icono + aerolinea/operador + clase + tipo -->
-      <header class="bp-header">
-        <div class="bp-header__left">
-          <div class="bp-icon">
-            <ion-icon [name]="pass.kind === 'train' ? 'train' : 'airplane'"
-                      [class.bp-icon-train]="pass.kind === 'train'"></ion-icon>
-          </div>
-          <div class="bp-airline">
-            <span class="bp-airline__code mono">{{ airlineLabel(pass) }}</span>
-            <span class="bp-airline__name">{{ pass.kind === 'train' ? 'TREN' : (pass.airline ? airlineName(pass.airline) : 'VUELO') }}</span>
-          </div>
+      <!-- Person header (clickable accordion) -->
+      <div class="person-header" (click)="toggleGroup(grp.name)">
+        <div class="person-header__left">
+          <ion-icon [name]="isGroupExpanded(grp.name) ? 'chevron-down-circle' : 'chevron-forward-circle'"
+                    class="person-header__chevron"></ion-icon>
+          <span class="person-header__name">{{ grp.name }}</span>
         </div>
-        <div class="bp-class">
-          <span class="bp-class__label">CLASE</span>
-          <span class="board-code board-code--md">{{ pass.class || '—' }}</span>
+        <div class="person-header__right">
+          <span class="person-header__count">{{ grp.passes.length }} billete{{ grp.passes.length > 1 ? 's' : '' }}</span>
         </div>
-      </header>
-
-      <!-- Strip: ruta o tren -->
-      <div class="bp-strip">
-        <ng-container *ngIf="pass.kind === 'train' && pass.train; else flightStrip">
-          <div class="bp-strip__end">
-            <span class="board-code board-code--xl mono">{{ pass.train }}</span>
-            <span class="bp-strip__label">TREN</span>
-          </div>
-          <div class="bp-strip__line">
-            <div class="strip-line"></div>
-            <span class="bp-strip__time">{{ pass.flight_time || '—' }}</span>
-          </div>
-          <div class="bp-strip__end">
-            <span class="board-code board-code--md mono">{{ pass.pnr || '—' }}</span>
-            <span class="bp-strip__label">LOCALIZADOR</span>
-          </div>
-        </ng-container>
-        <ng-template #flightStrip>
-          <div class="bp-strip__end">
-            <span class="board-code board-code--xl">{{ pass.from || '???' }}</span>
-            <span class="bp-strip__label">DESDE</span>
-          </div>
-          <div class="bp-strip__line">
-            <div class="strip-line"></div>
-            <span class="bp-strip__time">{{ pass.flight_time || '—' }}</span>
-          </div>
-          <div class="bp-strip__end">
-            <span class="board-code board-code--xl">{{ pass.to || '???' }}</span>
-            <span class="bp-strip__label">HASTA</span>
-          </div>
-        </ng-template>
       </div>
 
-      <!-- Info grid: depende del kind -->
-      <div class="bp-info">
-        <ng-container *ngIf="pass.kind === 'train'; else flightInfo">
-          <div class="bp-info__cell">
-            <span class="bp-info__label">PASAJERO</span>
-            <span class="bp-info__value">{{ pass.name || '—' }}</span>
-          </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">LOCALIZADOR</span>
-            <span class="bp-info__value mono">{{ pass.pnr || '—' }}</span>
-          </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">TREN</span>
-            <span class="bp-info__value mono">{{ pass.train || '—' }}</span>
-          </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">FECHA</span>
-            <span class="bp-info__value mono">{{ pass.flight_date || '—' }}</span>
-          </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">HORA</span>
-            <span class="bp-info__value mono">{{ pass.flight_time || '—' }}</span>
-          </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">CLASE</span>
-            <span class="bp-info__value mono">{{ pass.class || '—' }}</span>
-          </div>
-        </ng-container>
-        <ng-template #flightInfo>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">PASAJERO</span>
-            <span class="bp-info__value">{{ pass.name || '—' }}</span>
-          </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">PNR / LOCALIZADOR</span>
-            <span class="bp-info__value mono">{{ pass.pnr || '—' }}</span>
-          </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">VUELO</span>
-            <span class="bp-info__value mono">{{ pass.airline }}{{ pass.flight }}</span>
-          </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">FECHA</span>
-            <span class="bp-info__value mono">{{ pass.flight_date || '—' }}</span>
-          </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">HORA</span>
-            <span class="bp-info__value mono">{{ pass.flight_time || '—' }}</span>
-          </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">ASIENTO</span>
-            <span class="bp-info__value mono">{{ pass.seat || '—' }}</span>
-          </div>
-        </ng-template>
-      </div>
+      <!-- Pass cards (shown when expanded) -->
+      <div class="person-passes" *ngIf="isGroupExpanded(grp.name)">
+        <article class="boarding-pass pass-stub"
+                 *ngFor="let pass of grp.passes; let j = index"
+                 [class.bp-train]="pass.kind === 'train'"
+                 [class.bp-flight]="pass.kind === 'flight' || !pass.kind">
 
-      <!-- Barcode -->
-      <div *ngIf="imageFor(pass) as img" class="bp-barcode">
-        <img [src]="'data:image/png;base64,' + img.base64" alt="barcode" />
-        <span class="bp-barcode__hint mono">{{ pass.format }} · {{ pass.kind === 'train' ? 'TREN' : 'VUELO' }}</span>
-      </div>
+          <div class="bp-perforation"></div>
 
-      <p *ngIf="pass.sourceFile" class="bp-source mono">origen: {{ pass.sourceFile }}</p>
-    </article>
+          <!-- Header -->
+          <header class="bp-header">
+            <div class="bp-header__left">
+              <div class="bp-icon">
+                <ion-icon [name]="pass.kind === 'train' ? 'train' : 'airplane'"
+                          [class.bp-icon-train]="pass.kind === 'train'"></ion-icon>
+              </div>
+              <div class="bp-airline">
+                <span class="bp-airline__code mono">{{ airlineLabel(pass) }}</span>
+                <span class="bp-airline__name">{{ pass.kind === 'train' ? 'TREN' : (pass.airline ? airlineName(pass.airline) : 'VUELO') }}</span>
+              </div>
+            </div>
+            <div class="bp-class">
+              <span class="bp-class__label">CLASE</span>
+              <span class="board-code board-code--md">{{ pass.class || '—' }}</span>
+            </div>
+          </header>
+
+          <!-- Strip -->
+          <div class="bp-strip">
+            <ng-container *ngIf="pass.kind === 'train' && pass.train; else flightStrip">
+              <div class="bp-strip__end">
+                <span class="board-code board-code--xl mono">{{ pass.train }}</span>
+                <span class="bp-strip__label">TREN</span>
+              </div>
+              <div class="bp-strip__line">
+                <div class="strip-line"></div>
+                <span class="bp-strip__time">{{ pass.flight_time || '—' }}</span>
+              </div>
+              <div class="bp-strip__end">
+                <span class="board-code board-code--md mono">{{ pass.pnr || '—' }}</span>
+                <span class="bp-strip__label">LOCALIZADOR</span>
+              </div>
+            </ng-container>
+            <ng-template #flightStrip>
+              <div class="bp-strip__end">
+                <span class="board-code board-code--xl">{{ pass.from || '???' }}</span>
+                <span class="bp-strip__label">DESDE</span>
+              </div>
+              <div class="bp-strip__line">
+                <div class="strip-line"></div>
+                <span class="bp-strip__time">{{ pass.flight_time || '—' }}</span>
+              </div>
+              <div class="bp-strip__end">
+                <span class="board-code board-code--xl">{{ pass.to || '???' }}</span>
+                <span class="bp-strip__label">HASTA</span>
+              </div>
+            </ng-template>
+          </div>
+
+          <!-- Info grid -->
+          <div class="bp-info">
+            <ng-container *ngIf="pass.kind === 'train'; else flightInfo">
+              <div class="bp-info__cell">
+                <span class="bp-info__label">PASAJERO</span>
+                <span class="bp-info__value">{{ pass.name || '—' }}</span>
+              </div>
+              <div class="bp-info__cell">
+                <span class="bp-info__label">LOCALIZADOR</span>
+                <span class="bp-info__value mono">{{ pass.pnr || '—' }}</span>
+              </div>
+              <div class="bp-info__cell">
+                <span class="bp-info__label">TREN</span>
+                <span class="bp-info__value mono">{{ pass.train || '—' }}</span>
+              </div>
+              <div class="bp-info__cell">
+                <span class="bp-info__label">FECHA</span>
+                <span class="bp-info__value mono">{{ pass.flight_date || '—' }}</span>
+              </div>
+              <div class="bp-info__cell">
+                <span class="bp-info__label">HORA</span>
+                <span class="bp-info__value mono">{{ pass.flight_time || '—' }}</span>
+              </div>
+              <div class="bp-info__cell">
+                <span class="bp-info__label">CLASE</span>
+                <span class="bp-info__value mono">{{ pass.class || '—' }}</span>
+              </div>
+            </ng-container>
+            <ng-template #flightInfo>
+              <div class="bp-info__cell">
+                <span class="bp-info__label">PASAJERO</span>
+                <span class="bp-info__value">{{ pass.name || '—' }}</span>
+              </div>
+              <div class="bp-info__cell">
+                <span class="bp-info__label">PNR / LOCALIZADOR</span>
+                <span class="bp-info__value mono">{{ pass.pnr || '—' }}</span>
+              </div>
+              <div class="bp-info__cell">
+                <span class="bp-info__label">VUELO</span>
+                <span class="bp-info__value mono">{{ pass.airline }}{{ pass.flight }}</span>
+              </div>
+              <div class="bp-info__cell">
+                <span class="bp-info__label">FECHA</span>
+                <span class="bp-info__value mono">{{ pass.flight_date || '—' }}</span>
+              </div>
+              <div class="bp-info__cell">
+                <span class="bp-info__label">HORA</span>
+                <span class="bp-info__value mono">{{ pass.flight_time || '—' }}</span>
+              </div>
+              <div class="bp-info__cell">
+                <span class="bp-info__label">ASIENTO</span>
+                <span class="bp-info__value mono">{{ pass.seat || '—' }}</span>
+              </div>
+            </ng-template>
+          </div>
+
+          <!-- Barcode -->
+          <div *ngIf="imageFor(pass) as img" class="bp-barcode">
+            <img [src]="'data:image/png;base64,' + img.base64" alt="barcode" />
+            <span class="bp-barcode__hint mono">{{ pass.format }} · {{ pass.kind === 'train' ? 'TREN' : 'VUELO' }}</span>
+          </div>
+
+          <p *ngIf="pass.sourceFile" class="bp-source mono">origen: {{ pass.sourceFile }}</p>
+        </article>
+      </div>
+    </div>
   </div>
 </ion-content>

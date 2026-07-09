@@ -3,6 +3,11 @@ import { Router } from '@angular/router';
 import { ToastController } from '@ionic/angular';
 import { BarcodeImage, BoardingPassService, Pass } from '../services/boarding-pass.service';
 
+export interface PassengerGroup {
+  name: string;
+  passes: Pass[];
+}
+
 @Component({
   selector: 'app-result',
   templateUrl: './result.page.html',
@@ -13,6 +18,8 @@ export class ResultPage {
   filename = '';
   passes: Pass[] = [];
   images: BarcodeImage[] = [];
+  groups: PassengerGroup[] = [];
+  expandedGroup: string | null = null;
   saved = false;
   saving = false;
   savedTripId = 0;
@@ -25,8 +32,6 @@ export class ResultPage {
 
   /** Ionic lifecycle: se ejecuta cada vez que la pagina se muestra. */
   ionViewWillEnter() {
-    // Usamos history.state en vez de getCurrentNavigation para navegaciones
-    // desde cualquier origen (routerLink, navigate, back button).
     const state = history.state as {
       filename: string;
       passes: Pass[];
@@ -36,8 +41,45 @@ export class ResultPage {
       this.filename = state.filename || '';
       this.passes = state.passes;
       this.images = state.images || [];
+      this.groups = this.buildGroups(state.passes);
+      this.expandedGroup = null;
       this.saved = false;
     }
+  }
+
+  private buildGroups(passes: Pass[]): PassengerGroup[] {
+    const map = new Map<string, Pass[]>();
+    for (const p of passes) {
+      const key = (p.name || 'Sin nombre').toUpperCase();
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(p);
+    }
+    const groups: PassengerGroup[] = [];
+    for (const [key, list] of map) {
+      // Orden cronologico: flight_date asc, flight_time asc (nulls al final)
+      list.sort((a, b) => {
+        const da = a.flight_date || '9999-99-99';
+        const db = b.flight_date || '9999-99-99';
+        if (da !== db) return da < db ? -1 : 1;
+        const ta = a.flight_time || '99:99';
+        const tb = b.flight_time || '99:99';
+        return ta < tb ? -1 : 1;
+      });
+      // Usar el nombre original del primer pase del grupo
+      const originalName = list[0].name || 'Sin nombre';
+      groups.push({ name: originalName, passes: list });
+    }
+    // Ordenar grupos alfabeticamente por nombre
+    groups.sort((a, b) => a.name.localeCompare(b.name));
+    return groups;
+  }
+
+  toggleGroup(name: string) {
+    this.expandedGroup = this.expandedGroup === name ? null : name;
+  }
+
+  isGroupExpanded(name: string): boolean {
+    return this.expandedGroup === name;
   }
 
   saveTrip() {

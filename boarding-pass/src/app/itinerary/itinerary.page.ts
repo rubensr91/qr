@@ -53,6 +53,8 @@ export class ItineraryPage {
   tripName = '';
   passes: Pass[] = [];
   images: BarcodeImage[] = [];
+  groups: { name: string; passes: Pass[] }[] = [];
+  expandedGroup: string | null = null;
   segments: TravelSegment[] = [];
   itinerary: ItineraryData | null = null;
   loading = true;
@@ -78,6 +80,7 @@ export class ItineraryPage {
       // Si no nos llegan passes/segments por el state, los pedimos a la API
       if (state.passes?.length || state.segments?.length) {
         this.passes = state.passes || [];
+        this.groups = this.buildGroups(this.passes);
         this.segments = state.segments || [];
         this.images = state.images || [];
         this.afterLoad();
@@ -102,6 +105,7 @@ export class ItineraryPage {
         const trip = resp.trips.find((t: any) => t.id === this.tripId);
         if (trip) {
           this.passes = trip.pass_data.passes || [];
+          this.groups = this.buildGroups(this.passes);
           this.images = trip.pass_data.images || [];
           this.segments = trip.segments || [];
           this.tripName = trip.trip_name || trip.filename;
@@ -199,6 +203,38 @@ export class ItineraryPage {
       return `Tren ${pass.train ?? '?'}`;
     }
     return pass.format || 'Pase';
+  }
+
+  private buildGroups(passes: Pass[]): { name: string; passes: Pass[] }[] {
+    const map = new Map<string, Pass[]>();
+    for (const p of passes) {
+      const key = (p.name || 'Sin nombre').toUpperCase();
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(p);
+    }
+    const groups: { name: string; passes: Pass[] }[] = [];
+    for (const [, list] of map) {
+      list.sort((a, b) => {
+        const da = a.flight_date || '9999-99-99';
+        const db = b.flight_date || '9999-99-99';
+        if (da !== db) return da < db ? -1 : 1;
+        const ta = a.flight_time || '99:99';
+        const tb = b.flight_time || '99:99';
+        return ta < tb ? -1 : 1;
+      });
+      const originalName = list[0].name || 'Sin nombre';
+      groups.push({ name: originalName, passes: list });
+    }
+    groups.sort((a, b) => a.name.localeCompare(b.name));
+    return groups;
+  }
+
+  toggleGroup(name: string) {
+    this.expandedGroup = this.expandedGroup === name ? null : name;
+  }
+
+  isGroupExpanded(name: string): boolean {
+    return this.expandedGroup === name;
   }
 
   getAirlineName(code: string | undefined): string {

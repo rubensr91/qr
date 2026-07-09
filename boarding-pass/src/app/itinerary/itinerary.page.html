@@ -72,7 +72,7 @@
       </ion-segment-button>
       <ion-segment-button value="cards">
         <ion-icon name="ticket-outline"></ion-icon>
-        <ion-label>Tarjetas</ion-label>
+        <ion-label>Billetes</ion-label>
       </ion-segment-button>
       <ion-segment-button value="bookings">
         <ion-icon name="reader-outline"></ion-icon>
@@ -96,58 +96,77 @@
       </ion-segment-button>
     </ion-segment>
 
-    <!-- TARJETAS DE EMBARQUE -->
+    <!-- BILLETES -->
     <div class="section" *ngIf="activeTab === 'cards'">
-      <div *ngIf="passes.length === 0" class="empty-tab">
-        <p>No hay tarjetas de embarque subidas.</p>
+      <div *ngIf="groups.length === 0" class="empty-tab">
+        <p>No hay billetes subidos.</p>
       </div>
 
-      <article class="boarding-pass pass-stub" *ngFor="let pass of passes; let i = index"
-                [style.animation-delay.ms]="i * 60">
-        <header class="bp-header">
-          <div class="bp-airline">
-            <span class="bp-airline__name">{{ getAirlineName(pass.airline) || (pass.kind === 'train' ? 'Tren' : pass.format) }}</span>
-            <span class="bp-airline__code mono">{{ pass.airline || pass.format }}</span>
-          </div>
-          <div class="bp-route">
-            <span class="board-code board-code--lg">{{ pass.from || '???' }}</span>
-            <ion-icon name="paper-plane" class="bp-route__plane"></ion-icon>
-            <span class="board-code board-code--lg">{{ pass.to || '???' }}</span>
-          </div>
-          <div class="bp-class">
-            <span class="bp-class__label">CLASE</span>
-            <span class="board-code board-code--md">{{ pass.class || '—' }}</span>
-          </div>
-        </header>
+      <div class="bill-list" *ngIf="groups.length">
+        <div class="person-group" *ngFor="let grp of groups; let i = index">
 
-        <div class="bp-info">
-          <div class="bp-info__cell bp-info__cell--wide">
-            <span class="bp-info__label">PASAJERO</span>
-            <span class="bp-info__value">{{ pass.name || '—' }}</span>
+          <!-- Person header (clickable accordion) -->
+          <div class="person-header" (click)="toggleGroup(grp.name)">
+            <div class="person-header__left">
+              <ion-icon [name]="isGroupExpanded(grp.name) ? 'chevron-down-circle' : 'chevron-forward-circle'"
+                        class="person-header__chevron"></ion-icon>
+              <span class="person-header__name">{{ grp.name }}</span>
+            </div>
+            <div class="person-header__right">
+              <span class="person-header__count">{{ grp.passes.length }} billete{{ grp.passes.length > 1 ? 's' : '' }}</span>
+            </div>
           </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">PNR</span>
-            <span class="bp-info__value mono">{{ pass.pnr || '—' }}</span>
-          </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">VUELO / TREN</span>
-            <span class="bp-info__value mono">{{ pass.airline }}{{ pass.flight || pass.train || '' }}</span>
-          </div>
-          <div class="bp-info__cell">
-            <span class="bp-info__label">FECHA</span>
-            <span class="bp-info__value mono">{{ pass.flight_date || '—' }}</span>
-          </div>
-          <div class="bp-info__cell" *ngIf="pass.seat">
-            <span class="bp-info__label">ASIENTO</span>
-            <span class="bp-info__value mono">{{ pass.seat }}</span>
+
+          <!-- Pass cards (shown when expanded) -->
+          <div class="person-passes" *ngIf="isGroupExpanded(grp.name)">
+            <article class="boarding-pass pass-stub" *ngFor="let pass of grp.passes; let j = index">
+              <header class="bp-header">
+                <div class="bp-airline">
+                  <span class="bp-airline__name">{{ getAirlineName(pass.airline) || (pass.kind === 'train' ? 'Tren' : pass.format) }}</span>
+                  <span class="bp-airline__code mono">{{ pass.airline || pass.format }}</span>
+                </div>
+                <div class="bp-route">
+                  <span class="board-code board-code--lg">{{ pass.from || '???' }}</span>
+                  <ion-icon name="paper-plane" class="bp-route__plane"></ion-icon>
+                  <span class="board-code board-code--lg">{{ pass.to || '???' }}</span>
+                </div>
+                <div class="bp-class">
+                  <span class="bp-class__label">CLASE</span>
+                  <span class="board-code board-code--md">{{ pass.class || '—' }}</span>
+                </div>
+              </header>
+
+              <div class="bp-info">
+                <div class="bp-info__cell bp-info__cell--wide">
+                  <span class="bp-info__label">PASAJERO</span>
+                  <span class="bp-info__value">{{ pass.name || '—' }}</span>
+                </div>
+                <div class="bp-info__cell">
+                  <span class="bp-info__label">PNR</span>
+                  <span class="bp-info__value mono">{{ pass.pnr || '—' }}</span>
+                </div>
+                <div class="bp-info__cell">
+                  <span class="bp-info__label">VUELO / TREN</span>
+                  <span class="bp-info__value mono">{{ pass.airline }}{{ pass.flight || pass.train || '' }}</span>
+                </div>
+                <div class="bp-info__cell">
+                  <span class="bp-info__label">FECHA</span>
+                  <span class="bp-info__value mono">{{ pass.flight_date || '—' }}</span>
+                </div>
+                <div class="bp-info__cell" *ngIf="pass.seat">
+                  <span class="bp-info__label">ASIENTO</span>
+                  <span class="bp-info__value mono">{{ pass.seat }}</span>
+                </div>
+              </div>
+
+              <div *ngIf="imageFor(pass) as img" class="bp-barcode">
+                <img [src]="'data:image/png;base64,' + img.base64" [alt]="pass.format" />
+                <span class="bp-barcode__hint mono">{{ pass.format }} · p{{ pass.page }}</span>
+              </div>
+            </article>
           </div>
         </div>
-
-        <div *ngIf="imageFor(pass) as img" class="bp-barcode">
-          <img [src]="'data:image/png;base64,' + img.base64" [alt]="pass.format" />
-          <span class="bp-barcode__hint mono">{{ pass.format }} · p{{ pass.page }}</span>
-        </div>
-      </article>
+      </div>
     </div>
 
     <!-- RESERVAS -->
