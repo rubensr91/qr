@@ -53,7 +53,7 @@ def _get_db() -> sqlite3.Connection:
 
 def _init_db():
     """Inicializa la tabla de viajes si no existe."""
-    conn = _get_db()
+    conn = sqlite3.connect(str(DB_PATH))
     conn.execute("""
         CREATE TABLE IF NOT EXISTS trips (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
