@@ -91,20 +91,26 @@ export interface ItineraryResponse {
 export class ItineraryService {
   constructor(private http: HttpClient) {}
 
-  /** Obtiene itinerario cacheado (GET). Lanza 404 si no existe. */
+  private _headers(sessionId: string): HttpHeaders {
+    let h = new HttpHeaders({ 'X-Session-Id': sessionId });
+    if (environment.apiUrl.includes('loca.lt')) {
+      h = h.set('Bypass-Tunnel-Reminder', 'true');
+    }
+    return h;
+  }
+
   getCached(tripId: number, sessionId: string): Observable<ItineraryResponse> {
     return this.http.get<ItineraryResponse>(
       `${environment.apiUrl}/api/itinerary/${tripId}`,
-      { headers: new HttpHeaders({ 'X-Session-Id': sessionId }) },
+      { headers: this._headers(sessionId) },
     );
   }
 
-  /** Genera itinerario nuevo (POST). Si ya existe cache, lo devuelve igual. */
   generate(tripId: number, sessionId: string): Observable<ItineraryResponse> {
     return this.http.post<ItineraryResponse>(
       `${environment.apiUrl}/api/itinerary/${tripId}`,
       {},
-      { headers: new HttpHeaders({ 'X-Session-Id': sessionId }) },
+      { headers: this._headers(sessionId) },
     );
   }
 }
