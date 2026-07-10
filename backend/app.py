@@ -200,9 +200,11 @@ def _is_pass_complete(pass_data: dict) -> tuple[bool, str]:
     kind = pass_data.get("kind")
     if kind not in ("flight", "train"):
         return False, f"tipo desconocido {kind!r}"
-    if not pass_data.get("pnr") or not pass_data.get("flight_date"):
-        return False, "faltan pnr/fecha"
+    if not pass_data.get("flight_date"):
+        return False, "falta fecha"
     if kind == "flight":
+        if not pass_data.get("pnr"):
+            return False, "vuelo sin localizador"
         if not pass_data.get("from") or not pass_data.get("to"):
             return False, "vuelo sin origen/destino"
         if not pass_data.get("name") or not pass_data.get("airline") or not pass_data.get("flight"):
@@ -266,12 +268,14 @@ async def extract(file: UploadFile = File(...)):
         # Mezclar campos del texto del PDF (solo si el barcode no los tiene)
         extras = text_fields.get(page, {})
         if extras:
-            for key in ("from", "to", "seat", "name", "flight_time", "train", "coach"):
+            for key in ("from", "to", "seat", "name", "flight_time", "train", "coach", "pnr"):
                 if key in extras and not parsed.get(key):
                     parsed[key] = extras[key]
-            # Para trenes: sobreescribir train si el barcode es 000000 (invalido)
-            if parsed.get("kind") == "train" and extras.get("train") and parsed.get("train", "").lstrip("0") == "":
-                parsed["train"] = extras["train"]
+            # Para trenes: sobreescribir train si el barcode empieza por 000 (invalido)
+            if parsed.get("kind") == "train" and extras.get("train"):
+                barcode_train = str(parsed.get("train", ""))
+                if barcode_train.startswith("000") or barcode_train.lstrip("0") == "":
+                    parsed["train"] = extras["train"]
             # Si el código no tiene año (IATA BCBP) pero el PDF tiene fecha, usarla
             if not parsed.get("has_explicit_year") and extras.get("flight_date"):
                 parsed["flight_date"] = extras["flight_date"]

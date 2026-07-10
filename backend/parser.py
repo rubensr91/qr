@@ -216,12 +216,10 @@ def _parse_renfe(text):
     # Limpiar ceros de padding al final del localizador
     pnr = train_match["loc"].rstrip("0").rstrip(".")
 
-    # Rechazar PNRs claramente invalidos
+    # Marcar PNRs sospechosos como vacios (se rellenaran del texto PDF)
     if len(pnr) < 4 or pnr.upper() in ("NO", "SI", "CNO", "ANO", "BNO", "DNO"):
         pnr = ""
-
-    # Validacion: sin fecha ni localizador util, el pase es inutil -> descartar
-    if not pnr or not flight_date:
+    if not flight_date:
         return None
 
     return {
@@ -291,7 +289,7 @@ def _has_essential_data(parsed):
         if not parsed.get("airline") or not parsed.get("flight"):
             return False
     if fmt == "RENFE":
-        if not parsed.get("pnr") or not parsed.get("train"):
+        if not parsed.get("train"):
             return False
     return True
 
