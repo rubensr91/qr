@@ -272,18 +272,22 @@ def _extract_text_fields_from_doc(doc):
         text = page.get_text()
         page_fields = {}
 
-        # Origen
-        m = re.search(r"Origen:\s*\n?\s*(.+)", text, re.IGNORECASE)
+        # Origen (vuelos: "Origen:", trenes: "Origen", "Desde", "Salida de")
+        m = re.search(r"(?:Origen|Desde|Salida\s+de)\s*:?\s*\n?\s*(.+)", text, re.IGNORECASE)
+        if not m:
+            m = re.search(r"Origen\s*\n\s*(.+)", text, re.IGNORECASE)
         if m:
             page_fields["from"] = m.group(1).strip()
 
-        # Destino
-        m = re.search(r"Destino:\s*\n?\s*(.+)", text, re.IGNORECASE)
+        # Destino (vuelos: "Destino:", trenes: "Destino", "Hasta", "Llegada a")
+        m = re.search(r"(?:Destino|Hasta|Llegada\s+a)\s*:?\s*\n?\s*(.+)", text, re.IGNORECASE)
+        if not m:
+            m = re.search(r"Destino\s*\n\s*(.+)", text, re.IGNORECASE)
         if m:
             page_fields["to"] = m.group(1).strip()
 
-        # Plaza / Asiento
-        m = re.search(r"(?:Plaza|Asiento):\s*\n?\s*(\S+)", text, re.IGNORECASE)
+        # Plaza / Asiento (con o sin dos puntos)
+        m = re.search(r"(?:Plaza|Asiento)\s*:?\s*\n?\s*(\S+)", text, re.IGNORECASE)
         if m:
             page_fields["seat"] = m.group(1).strip()
 
@@ -319,9 +323,9 @@ def _extract_text_fields_from_doc(doc):
                 pass
 
         # Nombre del pasajero (varios formatos segun operador)
-        # 1) Etiqueta explicita "Pasajero:", "Titular:", "Nombre:"
+        # 1) Etiqueta explicita "Pasajero:", "Titular:", "Nombre:", "Viajero:"
         m = re.search(
-            r"(?:Pasajero|Titular|Nombre):\s*\n?\s*(.+)",
+            r"(?:Pasajero|Titular|Nombre|Viajero)\s*:?\s*\n?\s*(.+)",
             text, re.IGNORECASE,
         )
         # 2) Formato Renfe/OUIGO: linea "DNI ó DOC.ID:" + DNI + nombre
