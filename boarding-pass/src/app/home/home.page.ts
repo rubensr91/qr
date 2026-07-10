@@ -56,8 +56,8 @@ export class HomePage {
       loading.message = `Procesando ${i + 1}/${picked.length}: ${filename}`;
 
       try {
-        const f = await this.toBlob(file);
-        const resp = await firstValueFrom(this.svc.uploadPdf(f));
+        const blob = await this.toBlob(file);
+        const resp = await firstValueFrom(this.svc.uploadPdf(blob, file.name));
         if (resp) {
           for (const p of resp.passes) {
             p.sourceFile = filename;
@@ -103,7 +103,7 @@ export class HomePage {
     this.router.navigate(['/trips']);
   }
 
-  private async toBlob(picked: any): Promise<File> {
+  private async toBlob(picked: any): Promise<Blob> {
     const name = picked.name ?? 'file';
     const mime = picked.mimeType || '';
     const b64 = picked.data || picked.blob;
@@ -113,19 +113,18 @@ export class HomePage {
         const chars = atob(clean);
         const bytes = new Uint8Array(chars.length);
         for (let i = 0; i < chars.length; i++) bytes[i] = chars.charCodeAt(i);
-        return new File([bytes], name, { type: mime });
+        return new Blob([bytes], { type: mime });
       } catch (e: any) {
         throw new Error('Base64 decode failed: ' + e.message);
       }
     }
     if (picked.blob instanceof Blob) {
-      return new File([picked.blob], name, { type: mime });
+      return picked.blob;
     }
     const url = picked.path ?? picked.uri ?? '';
     if (url) {
       const resp = await fetch(url);
-      const blob = await resp.blob();
-      return new File([blob], name, { type: mime });
+      return await resp.blob();
     }
     throw new Error('No file data available');
   }

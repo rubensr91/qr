@@ -107,9 +107,9 @@ export class BoardingPassService {
 
   // --- PDF extraction ---
 
-  uploadPdf(file: File): Observable<ExtractResponse> {
+  uploadPdf(blob: Blob, filename?: string): Observable<ExtractResponse> {
     const fd = new FormData();
-    fd.append('file', file, file.name);
+    fd.append('file', blob, (filename as string) || 'file');
     return this.http.post<ExtractResponse>(
       `${environment.apiUrl}/api/extract`, fd, this._headers()
     );

@@ -281,7 +281,8 @@ async def extract(file: UploadFile = File(...)):
         ok, motivo = _is_pass_complete(parsed)
         if not ok:
             descartados += 1
-            print(f"[extract] p{page} descartado: {motivo}")
+            raw_preview = parsed.get('raw', '')[:80] if parsed.get('raw') else text[:80]
+            print(f"[extract] p{page} descartado ({motivo}): fmt={parsed.get('format','?')} raw={raw_preview!r}")
             continue
         passes.append({
             "page": page,
