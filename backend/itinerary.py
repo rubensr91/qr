@@ -120,6 +120,19 @@ SPANISH_CITY_ALIASES: dict[str, str] = {
 }
 
 
+def _sort_by_date(items: list[dict], date_key: str = "flight_date", time_key: str = "flight_time") -> list[dict]:
+    """Ordena items por fecha y hora usando objetos date para orden correcto."""
+    def sort_key(item):
+        d_str = item.get(date_key, "")
+        t_str = item.get(time_key, "") or ""
+        try:
+            d = date.fromisoformat(d_str) if d_str else date.min
+            return (d, t_str)
+        except (ValueError, TypeError):
+            return (date.min, t_str)
+    return sorted(items, key=sort_key)
+
+
 def _get_city_name(code: str) -> str:
     """Convierte codigo de aeropuerto a nombre de ciudad."""
     if not code:
@@ -207,98 +220,413 @@ def _weather_emoji(code: int) -> str:
     return "🌥️ Nublado"
 
 
-# --- DeepSeek LLM ---
+# --- Calendario diario (extrae itinerario base de pases + segmentos) ---
 
-def _build_itinerary_prompt(passes: list[dict], segments: list[dict], weather: list[dict], all_dates: list[str], num_days: int) -> str:
-    """Construye el prompt para DeepSeek basado en los datos del viaje."""
+_SPANISH_WEEKDAYS = [
+    "Lunes", "Martes", "Miércoles", "Jueves",
+    "Viernes", "Sábado", "Domingo",
+]
 
-    # Extraer info de pases (PDFs escaneados)
+def _spanish_weekday(date_str: str) -> str:
+    """Convierte '2025-12-01' -> 'Lunes'."""
+    try:
+        d = date.fromisoformat(date_str)
+        return _SPANISH_WEEKDAYS[d.weekday()]
+    except (ValueError, TypeError):
+        return ""
+
+
+def _infer_city_per_day(
+    passes: list[dict],
+    segments: list[dict],
+    all_dates: list[str],
+) -> dict[str, str | None]:
+    """Determina en qué ciudad está el viajero cada día del viaje.
+
+    Algoritmo:
+    1. Ciudad inicial = origen del primer vuelo.
+    2. Hoteles: Si hay check-in en fecha D, la ciudad del hotel pisa la actual
+       y se mantiene hasta el check-out (inclusive).
+    3. Vuelos/trenes: al llegar a destino, se actualiza la ciudad actual
+       para esa fecha y las siguientes.
+    4. Actividades y restaurantes: refuerzan la ciudad para su fecha.
+
+    Returns dict {fecha: ciudad | None}.
+    """
+    flights = [p for p in passes if p.get("kind") == "flight"]
+    flights_sorted = _sort_by_date(flights)
+
+    # Ciudad inicial: origen del primer vuelo, o None
+    current_city: str | None = None
+    if flights_sorted:
+        current_city = _get_city_name(flights_sorted[0].get("from", ""))
+
+    # Hoteles: rango de fechas -> ciudad (prioridad máxima)
+    hotel_map: dict[str, str] = {}
+    for s in segments:
+        if s.get("type") != "hotel":
+            continue
+        city = _get_city_name(s.get("city", ""))
+        if not city:
+            continue
+        ci = s.get("check_in", "")
+        co = s.get("check_out", "")
+        if not ci:
+            continue
+        # Aplicar a todas las fechas entre check_in y check_out (inclusive)
+        for d in all_dates:
+            if ci <= d <= (co or ci):
+                hotel_map[d] = city
+
+    # Vuelos y trenes: eventos que cambian la ciudad
+    transport_events: list[dict] = []
+    for f in flights_sorted:
+        fd = f.get("flight_date", "")
+        if not fd:
+            continue
+        transport_events.append({
+            "date": fd,
+            "time": f.get("flight_time", "") or "12:00",
+            "to_city": _get_city_name(f.get("to", "")),
+        })
+    for s in segments:
+        if s.get("type") == "train":
+            transport_events.append({
+                "date": s.get("date", ""),
+                "time": s.get("time", "") or "12:00",
+                "to_city": _get_city_name(s.get("to", "")),
+            })
+        elif s.get("type") == "flight":
+            transport_events.append({
+                "date": s.get("date", ""),
+                "time": s.get("time", "") or "12:00",
+                "to_city": _get_city_name(s.get("to_city", s.get("to", ""))),
+            })
+    transport_events.sort(key=lambda e: (e["date"], e["time"]))
+
+    city_per_day: dict[str, str | None] = {}
+    for date in all_dates:
+        # 1. ¿Hay hotel que cubra esta fecha?
+        if date in hotel_map:
+            current_city = hotel_map[date]
+            city_per_day[date] = current_city
+            continue
+
+        # 2. ¿Hay llegada de vuelo/tren en esta fecha?
+        arrivals_today = [e for e in transport_events if e["date"] == date]
+        if arrivals_today:
+            # La última llegada del día fija la ciudad
+            last = arrivals_today[-1]
+            if last["to_city"]:
+                current_city = last["to_city"]
+
+        city_per_day[date] = current_city
+
+    # 3. Refuerzo: actividades y restaurantes confirman ciudad para su fecha
+    for s in segments:
+        if s.get("type") in ("activity", "restaurant"):
+            city = _get_city_name(s.get("city", ""))
+            date = s.get("date", "")
+            if city and date in city_per_day:
+                if city_per_day[date] is None:
+                    city_per_day[date] = city
+
+    return city_per_day
+
+
+def _build_daily_calendar(
+    passes: list[dict],
+    segments: list[dict],
+    all_dates: list[str],
+    *,
+    origin_city: str | None = None,
+) -> list[dict]:
+    """Construye un calendario diario del viaje a partir de pases y segmentos.
+
+    Cada día incluye:
+    - date, day_number, weekday (español), city
+    - events: lista de eventos fijos
+    - free_blocks: franjas horarias libres para sugerir actividades
+    - is_origin_day: True si la ciudad = ciudad de origen (sin sugerencias)
+
+    Args:
+        origin_city: ciudad de origen del viajero. Días en esta ciudad
+                     se marcan como is_origin_day sin bloques libres.
+    """
     flights = [p for p in passes if p.get("kind") == "flight"]
     trains = [p for p in passes if p.get("kind") == "train"]
 
-    # Extraer info de segmentos manuales
-    seg_flights = [s for s in segments if s.get("type") == "flight"]
-    seg_trains = [s for s in segments if s.get("type") == "train"]
-    seg_hotels = [s for s in segments if s.get("type") == "hotel"]
-    seg_cars = [s for s in segments if s.get("type") == "car"]
-    seg_restaurants = [s for s in segments if s.get("type") == "restaurant"]
-    seg_activities = [s for s in segments if s.get("type") == "activity"]
+    flights_sorted = _sort_by_date(flights)
 
-    # Destinos (de vuelos extraidos + manuales + trenes)
-    destinations = []
-    for p in flights:
-        to_city = _get_city_name(p.get("to", ""))
-        if to_city and to_city not in destinations:
-            destinations.append(to_city)
-    # Trenes: extraer ciudades del campo 'from'/'to' (ej: "MADRID P.ATOCHA", "TOLEDO")
-    for p in trains:
-        for field in ("to", "from"):
-            raw = p.get(field, "")
-            city = _get_city_name(raw)
-            if city and city not in destinations:
-                destinations.append(city)
-    for s in seg_flights:
-        city = s.get("to_city", s.get("to", ""))
-        if city and city not in destinations:
-            destinations.append(city)
-    for s in seg_hotels:
-        city = s.get("city", "")
-        if city and city not in destinations:
-            destinations.append(city)
-    for s in seg_activities:
-        city = s.get("city", "")
-        if city and city not in destinations:
-            destinations.append(city)
+    city_per_day = _infer_city_per_day(passes, segments, all_dates)
 
-    dest_str = ", ".join(destinations) if destinations else "el destino indicado"
+    # Construir eventos diarios
+    days: dict[str, dict] = {
+        d: {
+            "date": d,
+            "day_number": i + 1,
+            "weekday": _spanish_weekday(d),
+            "city": city_per_day.get(d),
+            "is_origin_day": bool(origin_city and city_per_day.get(d) == origin_city),
+            "events": [],
+        }
+        for i, d in enumerate(all_dates)
+    }
 
-    # Fechas explicitas
-    dates_list = ", ".join(all_dates)
-    date_range = f"del {all_dates[0]} al {all_dates[-1]}" if all_dates else ""
+    # --- Vuelos (PDF) ---
+    for f in flights_sorted:
+        fd = f.get("flight_date", "")
+        if fd not in days:
+            continue
+        time_str = f.get("flight_time", "") or ""
+        airline = f.get("airline", "")
+        flight_no = f.get("flight", "")
+        from_city = _get_city_name(f.get("from", ""))
+        to_city = _get_city_name(f.get("to", ""))
+        days[fd]["events"].append({
+            "type": "flight_arrival",
+            "time": time_str,
+            "description": f"Llegada {airline}{flight_no} desde {from_city}",
+            "city": to_city,
+        })
 
-    # Info de vuelos (PDFs)
-    flight_info = ""
-    for p in flights:
-        airline = p.get("airline", "")
-        flight = p.get("flight", "")
-        from_city = _get_city_name(p.get("from", ""))
-        to_city = _get_city_name(p.get("to", ""))
-        flight_date = p.get("flight_date", "")
-        flight_info += f"- {airline}{flight}: {from_city} → {to_city} ({flight_date})\n"
+    # --- Trenes (PDF) ---
+    for t in trains:
+        fd = t.get("flight_date", "")
+        if fd not in days:
+            continue
+        time_str = t.get("flight_time", "") or ""
+        train_no = t.get("train", "")
+        from_raw = t.get("from", "")
+        to_raw = t.get("to", "")
+        from_city = _get_city_name(from_raw) or from_raw
+        to_city = _get_city_name(to_raw) or to_raw
+        days[fd]["events"].append({
+            "type": "train_arrival",
+            "time": time_str,
+            "description": f"Llegada tren {train_no} desde {from_city}",
+            "city": to_city,
+        })
 
-    # Info de vuelos manuales
-    for s in seg_flights:
-        flight_info += f"- {s.get('airline','')}{s.get('flight_number','')}: {s.get('from','')} → {s.get('to','')} ({s.get('date','')} {s.get('time','')})\n"
+    # --- Vuelos manuales ---
+    for s in segments:
+        if s.get("type") != "flight":
+            continue
+        fd = s.get("date", "")
+        if fd not in days:
+            continue
+        airline = s.get("airline", "")
+        flight_no = s.get("flight_number", "")
+        from_city = _get_city_name(s.get("from", "")) or s.get("from", "")
+        to_city = _get_city_name(s.get("to_city", s.get("to", ""))) or s.get("to", "")
+        days[fd]["events"].append({
+            "type": "flight_arrival",
+            "time": s.get("time", "") or "",
+            "description": f"Llegada {airline}{flight_no} desde {from_city}",
+            "city": to_city,
+        })
 
-    # Info de trenes
-    for p in trains:
-        from_city = _get_city_name(p.get("from", "")) or p.get("from", "")
-        to_city = _get_city_name(p.get("to", "")) or p.get("to", "")
-        flight_info += f"- Tren {p.get('train','')}: {from_city} → {to_city} (PNR {p.get('pnr','')}, {p.get('flight_date','')} {p.get('flight_time','')})\n"
-    for s in seg_trains:
-        flight_info += f"- Tren {s.get('operator','')} {s.get('train_number','')}: {s.get('from','')} → {s.get('to','')} ({s.get('date','')} {s.get('time','')})\n"
+    # --- Trenes manuales ---
+    for s in segments:
+        if s.get("type") != "train":
+            continue
+        fd = s.get("date", "")
+        if fd not in days:
+            continue
+        op = s.get("operator", "")
+        train_no = s.get("train_number", "")
+        from_city = _get_city_name(s.get("from", "")) or s.get("from", "")
+        to_city = _get_city_name(s.get("to", "")) or s.get("to", "")
+        days[fd]["events"].append({
+            "type": "train_arrival",
+            "time": s.get("time", "") or "",
+            "description": f"Llegada {op} {train_no} desde {from_city}",
+            "city": to_city,
+        })
 
-    # Hoteles
-    hotel_info = ""
-    for s in seg_hotels:
-        hotel_info += f"- {s.get('name','')}: {s.get('city','')}, check-in {s.get('check_in','')}, check-out {s.get('check_out','')}\n"
+    # --- Hoteles ---
+    for s in segments:
+        if s.get("type") != "hotel":
+            continue
+        hotel_city = _get_city_name(s.get("city", "")) or s.get("city", "")
+        name = s.get("name", "")
+        ci = s.get("check_in", "")
+        co = s.get("check_out", "")
+        if ci and ci in days:
+            days[ci]["events"].append({
+                "type": "hotel_checkin",
+                "time": "",
+                "description": f"Check-in {name}",
+                "city": hotel_city,
+            })
+        if co and co in days:
+            days[co]["events"].append({
+                "type": "hotel_checkout",
+                "time": "",
+                "description": f"Check-out {name}",
+                "city": hotel_city,
+            })
 
-    # Coches
-    car_info = ""
-    for s in seg_cars:
-        car_info += f"- {s.get('company','')}: {s.get('city','')}, {s.get('pickup_date','')} → {s.get('return_date','')}\n"
+    # --- Coches ---
+    for s in segments:
+        if s.get("type") != "car":
+            continue
+        company = s.get("company", "")
+        city = _get_city_name(s.get("city", "")) or s.get("city", "")
+        pickup_date = s.get("pickup_date", "")
+        return_date = s.get("return_date", "")
+        if pickup_date and pickup_date in days:
+            days[pickup_date]["events"].append({
+                "type": "car_pickup",
+                "time": "",
+                "description": f"Recogida coche {company}",
+                "city": city,
+            })
+        if return_date and return_date in days:
+            days[return_date]["events"].append({
+                "type": "car_return",
+                "time": "",
+                "description": f"Devolución coche {company}",
+                "city": city,
+            })
 
-    # Restaurantes reservados
-    rest_info = ""
-    for s in seg_restaurants:
-        rest_info += f"- {s.get('name','')}: {s.get('city','')}, {s.get('date','')} {s.get('time','')}\n"
+    # --- Restaurantes ---
+    for s in segments:
+        if s.get("type") != "restaurant":
+            continue
+        fd = s.get("date", "")
+        if fd not in days:
+            continue
+        name = s.get("name", "")
+        time_str = s.get("time", "") or ""
+        days[fd]["events"].append({
+            "type": "restaurant",
+            "time": time_str,
+            "description": f"Cena: {name}",
+            "city": _get_city_name(s.get("city", "")) or s.get("city", ""),
+        })
 
-    # Actividades reservadas
-    act_info = ""
-    for s in seg_activities:
-        act_info += f"- {s.get('name','')}: {s.get('city','')}, {s.get('date','')}\n"
+    # --- Actividades ---
+    for s in segments:
+        if s.get("type") != "activity":
+            continue
+        fd = s.get("date", "")
+        if fd not in days:
+            continue
+        name = s.get("name", "")
+        time_str = s.get("time", "") or ""
+        days[fd]["events"].append({
+            "type": "activity",
+            "time": time_str,
+            "description": f"Reserva: {name}",
+            "city": _get_city_name(s.get("city", "")) or s.get("city", ""),
+        })
 
-    # Clima
+    # Ordenar eventos por hora dentro de cada día
+    for d in days.values():
+        d["events"].sort(key=lambda e: e["time"] or "23:59")
+
+    # Calcular bloques libres usando franjas estándar (no duraciones desconocidas)
+    # Mañana: 06:00-12:00, Tarde: 12:00-18:00, Noche: 18:00-24:00
+    for d in days.values():
+        events_with_time = [e for e in d["events"] if e["time"]]
+        occupied_slots: set[str] = set()
+        for e in events_with_time:
+            h = int(e["time"].split(":")[0])
+            if h < 12:
+                occupied_slots.add("morning")
+            elif h < 18:
+                occupied_slots.add("afternoon")
+            else:
+                occupied_slots.add("evening")
+
+        # Para días en ciudad de origen (vuelta a casa): sin sugerencias
+        if d["is_origin_day"]:
+            d["free_blocks"] = []
+            d["has_fixed_events"] = len(d["events"]) > 0
+            continue
+
+        free_blocks = []
+        if "morning" not in occupied_slots:
+            free_blocks.append({
+                "start": None, "end": None,
+                "label": "Mañana (06:00—12:00)",
+            })
+        if "afternoon" not in occupied_slots:
+            free_blocks.append({
+                "start": None, "end": None,
+                "label": "Tarde (12:00—18:00)",
+            })
+        if "evening" not in occupied_slots:
+            free_blocks.append({
+                "start": None, "end": None,
+                "label": "Noche (18:00—24:00)",
+            })
+        if not free_blocks:
+            free_blocks.append({
+                "start": None, "end": None,
+                "label": "Día completo con eventos",
+            })
+
+        d["free_blocks"] = free_blocks
+        d["has_fixed_events"] = len(d["events"]) > 0
+
+    return [days[d] for d in all_dates]
+
+
+# --- DeepSeek LLM ---
+
+def _build_itinerary_prompt(
+    passes: list[dict],
+    segments: list[dict],
+    weather: list[dict],
+    all_dates: list[str],
+    num_days: int,
+    *,
+    trip_title: str | None = None,
+) -> str:
+    """Construye el prompt para DeepSeek a partir del calendario diario calculado."""
+
+    # Determinar ciudad de origen desde el primer vuelo
+    flights = [p for p in passes if p.get("kind") == "flight"]
+    flights_sorted = _sort_by_date(flights)
+    origin_city = _get_city_name(flights_sorted[0].get("from", "")) if flights_sorted else None
+
+    calendar = _build_daily_calendar(passes, segments, all_dates, origin_city=origin_city)
+
+    # Construir ciudades visitadas y nº de destinos únicos
+    # Ciudades visitadas EXCLUYENDO ciudad de origen (no generar contenido sobre ella)
+    all_cities = list(dict.fromkeys(
+        d["city"] for d in calendar if d["city"]
+    ))
+    cities = [c for c in all_cities if c != origin_city] or all_cities[:1]
+    dest_str = ", ".join(cities) if cities else "destino desconocido"
+    unique_destinations = cities
+
+    # --- Formatear CALENDARIO DIARIO como sección central del prompt ---
+    calendar_lines = []
+    for day in calendar:
+        header = f"Día {day['day_number']} — {day['weekday']} {day['date']} — 📍 {day['city'] or '?'}"
+        calendar_lines.append(header)
+
+        if day["events"]:
+            calendar_lines.append("  Eventos fijos (NO modificar):")
+            for ev in day["events"]:
+                time_part = f"  {ev['time']}" if ev["time"] else "     --"
+                calendar_lines.append(f"  {time_part}  {ev['description']}")
+        else:
+            calendar_lines.append("  (sin eventos fijos — día libre)")
+
+        if day["free_blocks"]:
+            calendar_lines.append("  ⏳ Bloques libres para sugerir actividades:")
+            for fb in day["free_blocks"]:
+                calendar_lines.append(f"     • {fb['label']}")
+
+        calendar_lines.append("")  # línea en blanco entre días
+
+    calendar_text = "\n".join(calendar_lines)
+
+    # --- Clima ---
     weather_str = ""
     if weather:
         weather_str = "\n".join(
@@ -306,53 +634,58 @@ def _build_itinerary_prompt(passes: list[dict], segments: list[dict], weather: l
             for w in weather[:14]
         )
 
-    prompt = f"""Eres un agente de viajes experto y un motor de generacion de datos estructurados. Tu objetivo es diseñar un itinerario de viaje hiper-personalizado y realista basado estrictamente en los datos proporcionados.
+    # --- Construir el prompt ---
+    prompt = f"""Eres un agente de viajes experto. Genera un itinerario enriquecido a partir del calendario base que te proporciono.
+
+=== TÍTULO DEL VIAJE ===
+{trip_title or dest_str}
+Este es el nombre del viaje. El destino PRINCIPAL es {dest_str}.
 
 === DATOS DEL VIAJE ===
-- Destino: {dest_str}
-- Fechas: {date_range}
-- Dias a planificar: {num_days} dias
-- Lista de fechas exactas: {dates_list}
-- FORMATO DE FECHAS: TODAS las fechas en este prompt usan formato ISO AÑO-MES-DIA (YYYY-MM-DD). Ej: 2025-12-31 = 31 de diciembre de 2025, 2026-01-12 = 12 de enero de 2026. No confundas mes con dia.
+Destinos: {dest_str}
+Días totales: {num_days}
+Fechas: {all_dates[0]} → {all_dates[-1]}
 
-=== VUELOS / LOGISTICA DE TRANSPORTE ===
-{flight_info or "No disponible de momento. Asume flexibilidad completa de horarios."}
+=== CALENDARIO BASE (extraído de tus reservas reales) ===
+Este es el esqueleto del viaje. Los eventos marcados como "fijos" son inamovibles
+(vuelos, trenes, hoteles, restaurantes y actividades ya reservados).
+Tu tarea es RELLENAR LOS HUECOS LIBRES con sugerencias.
 
-=== ALOJAMIENTO ===
-{hotel_info or "No especificado. Sugiere hoteles en las ciudades del viaje."}
-
-=== COCHE DE ALQUILER ===
-{car_info or "No especificado."}
-
-=== RESTAURANTES RESERVADOS ===
-{rest_info or "No especificado."}
-
-=== ACTIVIDADES RESERVADAS ===
-{act_info or "No especificado."}
+{calendar_text}
 
 === CLIMA PREVISTO ===
-{weather_str or "No disponible. Sugiere ropa y planes basados en el clima historico de esta epoca."}
+{weather_str or "No disponible — usa clima histórico de la época."}
 
-=== INSTRUCCIONES DE CONTENIDO OBLIGATORIAS ===
-1. REALISMO ABSOLUTO: Todos los nombres de hoteles, restaurantes, museos y lugares de interes DEBEN existir en la realidad. Esta prohibido inventar o alucinar nombres. Si el usuario ya tiene hotel/reservas, NO sugieras otros para esos dias, integra los existentes.
-2. IDIOMAS: Nombres propios en idioma local. Consejos y descripciones en español.
-3. LOGISTICA: El Dia 1 se adapta al horario de llegada. El ultimo dia al de salida. Check-in/check-out de hoteles reflejado en el plan.
-4. CONSISTENCIA: Hoteles, restaurantes y actividades YA RESERVADOS deben integrarse en el daily_itinerary. No sugieras alternativas para dias con reservas.
-5. CANTIDADES: 2-3 hoteles (si no hay reservados), 3-4 restaurantes, 3-5 lugares de interes, 1-2 sitios historicos.
-6. MULTI-CIUDAD: Reflejar desplazamientos entre ciudades en el daily_itinerary.
-7. CONCISION: NADA de parrafos largos. Cada descripcion debe ser UNA frase corta (max 15 palabras). Los tips y curiosidades deben ser telegraficos (max 10 palabras). Las actividades deben ser frases nominales breves (ej: "Visita al Prado", no "Por la mañana visitaremos el Museo del Prado...").
+=== TU TAREA ===
+A partir del calendario base, genera un JSON con:
+
+1. daily_itinerary [{num_days} elementos]: Para cada día, respeta los eventos fijos tal cual aparecen en el calendario base. En los bloques libres, sugiere actividades realistas para esa ciudad, clima y franja horaria. No inventes eventos que contradigan los fijos. La ciudad de cada día ya viene determinada en el calendario base — úsala.
+2. hotels: Si NO hay hoteles reservados en el calendario base, sugiere 2-3 hoteles reales en {" cada una de las ciudades: " + dest_str if len(unique_destinations) > 1 else " " + dest_str}. Si YA hay hoteles, NO sugieras otros, solo referencia los existentes.
+3. restaurants: 3-4 restaurantes reales en {dest_str}. Si ya hay cenas reservadas, menciónalas en daily_itinerary y sugiere restaurantes para las comidas sin reserva.
+4. places_of_interest: 3-5 lugares reales en {dest_str}.
+5. historical_sites: 1-2 sitios históricos reales en {dest_str}.
+6. transport_tips, general_tips, cultural_notes: tips breves y reales.
+
+=== REGLAS ===
+- SOLO nombres reales. PROHIBIDO inventar hoteles, restaurantes o museos.
+- Nombres propios en idioma local. Descripciones en español.
+- BREVEDAD: cada descripción ≤ 12 palabras. Tips ≤ 8 palabras.
+- daily_itinerary usa EXACTAMENTE las fechas del calendario base (no inventes otras).
+- Respeta check-in/check-out: el día de check-out NO sugieras actividades vinculadas a ese hotel.
+- Si un día es de desplazamiento (tren/vuelo), sugiere actividades ligeras o cercanas a la estación/aeropuerto.
+- Precios en €. Categorías: €, €€, €€€, €€€€.
 
 === FORMATO DE SALIDA ===
-Genera UNICAMENTE un objeto JSON valido. Sin markdown, sin texto adicional.
+Responde ÚNICAMENTE con el JSON. Sin markdown, sin explicaciones.
 
 {{
-  "destination_overview": "1 frase. Ej: 'Capital vibrante con gran oferta cultural y gastronomica.'",
-  "weather_summary": "1 frase. Ej: 'Calor en agosto, llevar ropa ligera y proteccion solar.'",
+  "destination_overview": "1 frase descriptiva de {dest_str}",
+  "weather_summary": "1 frase resumiendo el clima para las fechas del viaje",
   "hotels": [
     {{
-      "name": "Nombre real",
+      "name": "Nombre real del hotel",
       "zone": "Barrio o zona",
-      "description": "1 frase breve",
+      "description": "1 frase breve (≤12 palabras)",
       "price_range": "€, €€, €€€ o €€€€",
       "highlights": ["Punto fuerte 1", "Punto fuerte 2"]
     }}
@@ -360,8 +693,8 @@ Genera UNICAMENTE un objeto JSON valido. Sin markdown, sin texto adicional.
   "restaurants": [
     {{
       "name": "Nombre real",
-      "type": "Tradicional / Fusion / Market / etc",
-      "description": "Plato estrella en 5 palabras",
+      "type": "Tradicional / Fusión / Mercado / etc",
+      "description": "Plato estrella (≤8 palabras)",
       "price_range": "€, €€, €€€ o €€€€"
     }}
   ],
@@ -369,60 +702,69 @@ Genera UNICAMENTE un objeto JSON valido. Sin markdown, sin texto adicional.
     {{
       "name": "Nombre real",
       "type": "Museo / Parque / Mirador / etc",
-      "description": "1 frase",
-      "tips": ["Tip breve max 8 palabras"]
+      "description": "1 frase (≤12 palabras)",
+      "tips": ["Tip ≤8 palabras"]
     }}
   ],
   "historical_sites": [
     {{
       "name": "Nombre real",
-      "period": "Siglo / epoca",
-      "description": "1 frase",
-      "curiosity": "Dato curioso max 10 palabras"
+      "period": "Siglo / época",
+      "description": "1 frase (≤12 palabras)",
+      "curiosity": "Dato curioso ≤10 palabras"
     }}
   ],
   "daily_itinerary": [
     {{
       "day_number": 1,
-      "date": "YYYY-MM-DD",
-      "theme": "Concepto del dia en 5 palabras",
-      "morning": {{
-        "activities": ["Actividad 1"],
-        "description": "1 frase breve"
-      }},
-      "afternoon": {{
-        "activities": ["Actividad 1"],
-        "description": "1 frase breve"
-      }},
-      "evening": {{
-        "activities": ["Actividad 1"],
-        "description": "1 frase breve"
-      }},
-      "meal_suggestions": {{
-        "lunch": "Nombre restaurante o zona (5 palabras)",
-        "dinner": "Nombre restaurante o zona (5 palabras)"
-      }}
+      "date": "{all_dates[0]}",
+      "city": "{cities[0] if cities else '?'}",
+      "theme": "Concepto del día (≤5 palabras)",
+      "morning": {{ "activities": ["..."], "description": "≤12 palabras" }},
+      "afternoon": {{ "activities": ["..."], "description": "≤12 palabras" }},
+      "evening": {{ "activities": ["..."], "description": "≤12 palabras" }},
+      "meal_suggestions": {{ "lunch": "Restaurante o zona (≤8 palabras)", "dinner": "Restaurante o zona (≤8 palabras)" }}
     }}
   ],
-  "transport_tips": ["Tip breve max 10 palabras"],
-  "general_tips": ["Tip breve max 10 palabras"],
-  "cultural_notes": ["Nota cultural max 10 palabras"]
-}}
-
-REGLAS OBLIGATORIAS:
-- Responde SOLO el JSON, sin markdown, sin texto adicional.
-- daily_itinerary DEBE tener EXACTAMENTE {num_days} elementos: {dates_list}.
-- El dia 1 es llegada. El ultimo dia es salida.
-- SE BREVE. Maximo 15 palabras por descripcion. Maximo 1 actividad por franja horaria.
-- Precios en euros (€). Categorias: € economico, €€ medio, €€€ alto, €€€€ lujo."""
+  "transport_tips": ["Tip ≤10 palabras"],
+  "general_tips": ["Tip ≤10 palabras"],
+  "cultural_notes": ["Nota cultural ≤10 palabras"]
+}}"""
 
     return prompt
 
 
+def _real_flight_destinations(flights: list[dict], seg_hotels: list[dict], origin: str) -> list[str]:
+    """Retorna destinos reales de vuelos: excluye origen y conexiones
+    (siguiente vuelo desde misma ciudad el mismo día)."""
+    flights_sorted = _sort_by_date(flights)
+
+    def es_real(idx: int) -> bool:
+        f = flights_sorted[idx]
+        to_city = _get_city_name(f.get("to", ""))
+        if not to_city or to_city == origin:
+            return False
+        for sh in seg_hotels:
+            if _get_city_name(sh.get("city", "")).lower() == to_city.lower():
+                return True
+        if idx == len(flights_sorted) - 1:
+            return True
+        for f2 in flights_sorted[idx + 1:]:
+            if _get_city_name(f2.get("from", "")).lower() == to_city.lower():
+                return f2.get("flight_date") != f.get("flight_date")
+        return True
+
+    dests = []
+    for i, f in enumerate(flights_sorted):
+        c = _get_city_name(f.get("to", ""))
+        if c and es_real(i) and c not in dests:
+            dests.append(c)
+    return dests
+
+
 def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -> str:
     """Genera un titulo basado en los destinos del viaje: 'Viaje a Sevilla'.
-    Excluye la ciudad de origen (primer vuelo) para evitar mostrar
-    'Viaje a Sevilla y Barcelona' en viaje redondo BCN→SVQ→BCN."""
+    Excluye origen y ciudades de conexión."""
     if segments is None:
         segments = []
 
@@ -430,14 +772,9 @@ def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -
     trains = [p for p in passes if p.get("kind") == "train"]
     seg_hotels = [s for s in segments if s.get("type") == "hotel"]
 
-    # Ciudad de origen = from del primer vuelo
     origin = _get_city_name(flights[0].get("from", "")) if flights else ""
 
-    dests = []
-    for p in flights:
-        city = _get_city_name(p.get("to", ""))
-        if city and city != origin and city not in dests:
-            dests.append(city)
+    dests = _real_flight_destinations(flights, seg_hotels, origin)
     for t in trains:
         train = t.get("train", "")
         date = t.get("flight_date", "")
@@ -532,6 +869,82 @@ def _parse_json_response(content: str) -> dict:
     }
 
 
+def _build_basic_itinerary(
+    passes: list[dict],
+    segments: list[dict],
+    weather: list[dict],
+    all_dates: list[str],
+    num_days: int,
+) -> dict:
+    """Devuelve un itinerario básico (sin LLM) a partir del calendario diario.
+
+    Se usa como fallback cuando no hay DEEPSEEK_API_KEY configurada.
+    Contiene solo los eventos fijos extraídos de pases y segmentos, sin
+    sugerencias de restaurantes, lugares de interés ni notas culturales.
+    """
+    # Determinar origen desde el primer vuelo
+    flights = [p for p in passes if p.get("kind") == "flight"]
+    flights_sorted = _sort_by_date(flights)
+    origin_city = _get_city_name(flights_sorted[0].get("from", "")) if flights_sorted else None
+
+    calendar = _build_daily_calendar(passes, segments, all_dates, origin_city=origin_city)
+
+    cities = list(dict.fromkeys(
+        d["city"] for d in calendar if d["city"]
+    ))
+
+    daily = []
+    for day in calendar:
+        entry: dict = {
+            "day_number": day["day_number"],
+            "date": day["date"],
+            "city": day["city"],
+            "theme": f"Día en {day['city']}" if day["city"] else "Día de viaje",
+            "morning": {"activities": [], "description": ""},
+            "afternoon": {"activities": [], "description": ""},
+            "evening": {"activities": [], "description": ""},
+            "meal_suggestions": {"lunch": "", "dinner": ""},
+        }
+        for ev in day["events"]:
+            desc = ev["description"]
+            if ev["type"] in ("flight_arrival", "train_arrival"):
+                entry["morning"]["activities"].append(desc)
+            elif ev["type"] in ("restaurant",):
+                entry["evening"]["activities"].append(desc)
+                entry["meal_suggestions"]["dinner"] = desc.replace("Cena: ", "")
+            elif ev["type"] in ("activity",):
+                entry["afternoon"]["activities"].append(desc)
+            else:
+                entry["morning"]["activities"].append(desc)
+
+        if day["free_blocks"]:
+            for fb in day["free_blocks"]:
+                if "Mañana" in fb["label"]:
+                    entry["morning"]["description"] = fb["label"]
+                elif "Día completo" in fb["label"]:
+                    entry["morning"]["description"] = "Día libre"
+                elif "Noche" in fb["label"]:
+                    entry["evening"]["description"] = fb["label"]
+                else:
+                    entry["afternoon"]["description"] = fb["label"]
+
+        daily.append(entry)
+
+    return {
+        "destination_overview": f"Viaje a {', '.join(cities)}" if cities else "Viaje",
+        "weather_summary": "",
+        "hotels": [],
+        "restaurants": [],
+        "places_of_interest": [],
+        "historical_sites": [],
+        "daily_itinerary": daily,
+        "transport_tips": [],
+        "general_tips": [],
+        "cultural_notes": [],
+        "basic_mode": True,
+    }
+
+
 async def generate_itinerary(passes: list[dict], segments: list[dict] | None = None) -> dict:
     """Genera un itinerario completo usando DeepSeek LLM y Open-Meteo."""
     from datetime import timedelta
@@ -589,7 +1002,35 @@ async def generate_itinerary(passes: list[dict], segments: list[dict] | None = N
 
     num_days = len(all_dates)
 
-    # 2. Obtener clima para el primer destino con coordenadas
+    # Safety: nunca tener más de 31 días (un mes máximo) — evita year-inference bugs
+    if num_days > 31:
+        print(f"[itinerary] WARNING: {num_days} días es sospechoso, limitando a 31")
+        all_dates = all_dates[:31]
+        num_days = 31
+
+    # Calcular título del viaje para pasarlo al prompt
+    trip_title = generate_trip_name(passes, segments)
+
+    # 2. Guardrail: verificar que hay destinos identificables
+    # antes de gastar tokens del LLM en datos inservibles.
+    weather: list[dict] = []
+    calendar_check = _build_daily_calendar(passes, segments, all_dates)
+    identified_cities = [d["city"] for d in calendar_check if d["city"]]
+    has_events = any(d["has_fixed_events"] for d in calendar_check)
+    if not identified_cities:
+        print("[itinerary] ERROR: no se pudo determinar ninguna ciudad de destino")
+        return {
+            "error": "No se pudo determinar el destino del viaje. Añade al menos un vuelo, tren, hotel o actividad con ciudad.",
+            "weather": weather,
+        }
+    if not has_events and not DEEPSEEK_API_KEY:
+        print("[itinerary] ERROR: sin eventos fijos ni API key — imposible generar")
+        return {
+            "error": "Sin reservas ni eventos. Añade vuelos, hoteles o actividades y configura DEEPSEEK_API_KEY.",
+            "weather": weather,
+        }
+
+    # 3. Obtener clima para el primer destino con coordenadas
     weather = []
     for src_list in (flights, seg_flights):
         for item in src_list:
@@ -623,7 +1064,7 @@ async def generate_itinerary(passes: list[dict], segments: list[dict] | None = N
             **basic,
         }
 
-    prompt = _build_itinerary_prompt(passes, segments, weather, all_dates, num_days)
+    prompt = _build_itinerary_prompt(passes, segments, weather, all_dates, num_days, trip_title=trip_title)
 
     try:
         client = OpenAI(
@@ -636,7 +1077,7 @@ async def generate_itinerary(passes: list[dict], segments: list[dict] | None = N
                 {"role": "system", "content": "Eres un asistente de viajes experto. Responde SIEMPRE solo con JSON valido, sin markdown ni texto adicional."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.7,
+            temperature=0.3,
             max_tokens=16384,
         )
         content = response.choices[0].message.content or ""
