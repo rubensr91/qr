@@ -136,7 +136,13 @@ def _sort_by_date(items: list[dict], date_key: str = "flight_date", time_key: st
 
 
 def _get_city_name(code: str) -> str:
-    """Convierte codigo de aeropuerto a nombre de ciudad."""
+    """Convierte codigo de aeropuerto o nombre de estacion a ciudad.
+
+    Maneja:
+    - Codigos IATA: 'BCN' -> 'Barcelona'
+    - Nombres de estacion: 'Sevilla - Santa Justa' -> 'Sevilla'
+    - Ciudades en texto: 'MADRID P.ATOCHA' -> 'Madrid'
+    """
     if not code:
         return ""
     code_upper = code.upper().strip()
@@ -144,6 +150,9 @@ def _get_city_name(code: str) -> str:
         return AIRPORT_CITY_NAMES[code_upper]
     if code_upper in SPANISH_CITY_ALIASES:
         return SPANISH_CITY_ALIASES[code_upper]
+    # Estacion: 'Sevilla - Santa Justa' -> 'Sevilla'
+    if " - " in code:
+        return code.split(" - ")[0].strip()
     return code
 
 
@@ -258,10 +267,15 @@ def _infer_city_per_day(
     flights = [p for p in passes if p.get("kind") == "flight"]
     flights_sorted = _sort_by_date(flights)
 
-    # Ciudad inicial: origen del primer vuelo, o None
+    trains = [p for p in passes if p.get("kind") == "train"]
+    trains_sorted = _sort_by_date(trains, date_key="flight_date", time_key="flight_time")
+
+    # Ciudad inicial: origen del primer vuelo o tren
     current_city: str | None = None
     if flights_sorted:
         current_city = _get_city_name(flights_sorted[0].get("from", ""))
+    elif trains_sorted:
+        current_city = _get_city_name(trains_sorted[0].get("from", ""))
 
     # Hoteles: rango de fechas -> ciudad (prioridad máxima)
     hotel_map: dict[str, str] = {}
@@ -290,6 +304,15 @@ def _infer_city_per_day(
             "date": fd,
             "time": f.get("flight_time", "") or "12:00",
             "to_city": _get_city_name(f.get("to", "")),
+        })
+    for t in trains_sorted:
+        fd = t.get("flight_date", "")
+        if not fd:
+            continue
+        transport_events.append({
+            "date": fd,
+            "time": t.get("flight_time", "") or "12:00",
+            "to_city": _get_city_name(t.get("to", "")),
         })
     for s in segments:
         if s.get("type") == "train":
@@ -973,6 +996,13 @@ async def generate_itinerary(passes: list[dict], segments: list[dict] | None = N
         fd = p.get("flight_date")
         if fd:
             all_dates_set.add(fd)
+
+    # Fechas de trenes (pases)
+    for p in passes:
+        if p.get("kind") == "train":
+            fd = p.get("flight_date")
+            if fd:
+                all_dates_set.add(fd)
 
     # Fechas de segmentos manuales
     for s in seg_flights + seg_activities:
