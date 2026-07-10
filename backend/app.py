@@ -238,8 +238,7 @@ async def extract(file: UploadFile = File(...)):
 
         try:
             if is_image:
-                image_results = extract_codes_from_image(upload_path, out_dir)
-                results = image_results
+                results, ocr_data = extract_codes_from_image(upload_path, out_dir)
                 text_fields = {}
             else:
                 # extract_codes ahora devuelve (codes, text_fields) para
@@ -272,6 +271,12 @@ async def extract(file: UploadFile = File(...)):
             if not parsed.get("has_explicit_year") and extras.get("flight_date"):
                 parsed["flight_date"] = extras["flight_date"]
                 parsed["has_explicit_year"] = True
+        # Mezclar hora de OCR (imagenes) si el barcode no la tiene
+        if is_image and ocr_data:
+            if ocr_data.get("flight_time") and not parsed.get("flight_time"):
+                parsed["flight_time"] = ocr_data["flight_time"]
+            if ocr_data.get("gate_close_time"):
+                parsed["gate_close_time"] = ocr_data["gate_close_time"]
         # Validacion completa: descartar si faltan datos esenciales
         ok, motivo = _is_pass_complete(parsed)
         if not ok:
