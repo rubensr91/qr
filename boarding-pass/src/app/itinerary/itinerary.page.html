@@ -120,14 +120,15 @@
           <div class="person-passes" *ngIf="isGroupExpanded(grp.name)">
             <article class="boarding-pass pass-stub" *ngFor="let pass of grp.passes; let j = index">
               <header class="bp-header">
-                <div class="bp-route-hero">
+                <div class="bp-route-hero" [class.bp-route-hero--train]="pass.kind === 'train'">
                   <div class="bp-route-hero__side">
                     <span class="bp-route-hero__code">{{ pass.from || '???' }}</span>
                     <span class="bp-route-hero__label" *ngIf="pass.from">ORIGEN</span>
                   </div>
                   <div class="bp-route-hero__connector">
                     <span class="bp-route-hero__line"></span>
-                    <ion-icon name="airplane" class="bp-route-hero__plane"></ion-icon>
+                    <ion-icon *ngIf="pass.kind === 'train'" name="train" class="bp-route-hero__train-icon"></ion-icon>
+                    <ion-icon *ngIf="pass.kind !== 'train'" name="airplane" class="bp-route-hero__plane"></ion-icon>
                     <span class="bp-route-hero__line"></span>
                   </div>
                   <div class="bp-route-hero__side bp-route-hero__side--dest">
@@ -169,9 +170,9 @@
                   <span class="bp-info__label">HORA</span>
                   <span class="bp-info__value mono">{{ pass.flight_time || '—' }}</span>
                 </div>
-                <div class="bp-info__cell">
+                <div class="bp-info__cell" *ngIf="pass.gate_close_time">
                   <span class="bp-info__label">CIERRE PUERTAS</span>
-                  <span class="bp-info__value mono">{{ pass.gate_close_time || '—' }}</span>
+                  <span class="bp-info__value mono">{{ pass.gate_close_time }}</span>
                 </div>
                 <div class="bp-info__cell" *ngIf="pass.seat">
                   <span class="bp-info__label">ASIENTO</span>
