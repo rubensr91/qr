@@ -11,6 +11,8 @@ from datetime import datetime, date
 import httpx
 from openai import OpenAI
 
+from .parser import infer_years
+
 # --- Configuracion ---
 
 import os
@@ -951,6 +953,12 @@ async def generate_itinerary(passes: list[dict], segments: list[dict] | None = N
 
     if segments is None:
         segments = []
+
+    # Re-ejecutar infer_years con TODOS los pases juntos:
+    # en la API cada extract corre infer_years por separado y no detecta
+    # rollover de año (DOY 365 -> 002). Aqui con todos los pases juntos
+    # sí detecta el cruce y corrige las fechas.
+    infer_years(passes)
 
     flights = [p for p in passes if p.get("kind") == "flight"]
     seg_flights = [s for s in segments if s.get("type") == "flight"]
