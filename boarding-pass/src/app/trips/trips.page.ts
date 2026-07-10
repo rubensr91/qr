@@ -183,6 +183,8 @@ export class TripsPage {
   }
 
   private async toBlob(picked: any): Promise<File> {
+    const name = picked.name ?? 'file';
+    const mime = picked.mimeType || '';
     const b64 = picked.data || picked.blob;
     if (typeof b64 === 'string' && b64.length > 0) {
       let clean = b64.includes(',') ? b64.split(',')[1] : b64;
@@ -190,18 +192,19 @@ export class TripsPage {
         const chars = atob(clean);
         const bytes = new Uint8Array(chars.length);
         for (let i = 0; i < chars.length; i++) bytes[i] = chars.charCodeAt(i);
-        return new File([bytes], picked.name ?? 'file');
+        return new File([bytes], name, { type: mime });
       } catch (e: any) {
         throw new Error('Base64 decode failed: ' + e.message);
       }
     }
     if (picked.blob instanceof Blob) {
-      return new File([picked.blob], picked.name ?? 'file');
+      return new File([picked.blob], name, { type: mime });
     }
     const url = picked.path ?? picked.uri ?? '';
     if (url) {
       const resp = await fetch(url);
-      return new File([await resp.blob()], picked.name ?? 'file');
+      const blob = await resp.blob();
+      return new File([blob], name, { type: mime });
     }
     throw new Error('No file data available');
   }
