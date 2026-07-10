@@ -200,9 +200,11 @@ def _is_pass_complete(pass_data: dict) -> tuple[bool, str]:
     kind = pass_data.get("kind")
     if kind not in ("flight", "train"):
         return False, f"tipo desconocido {kind!r}"
-    if not pass_data.get("pnr") or not pass_data.get("from") or not pass_data.get("to") or not pass_data.get("flight_date"):
-        return False, "faltan pnr/origen/destino/fecha"
+    if not pass_data.get("pnr") or not pass_data.get("flight_date"):
+        return False, "faltan pnr/fecha"
     if kind == "flight":
+        if not pass_data.get("from") or not pass_data.get("to"):
+            return False, "vuelo sin origen/destino"
         if not pass_data.get("name") or not pass_data.get("airline") or not pass_data.get("flight"):
             return False, "vuelo sin nombre/aerolinea/numero"
     if kind == "train":
