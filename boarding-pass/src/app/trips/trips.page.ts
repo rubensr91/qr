@@ -108,6 +108,7 @@ export class TripsPage {
       const result = await FilePicker.pickFiles({
         types: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'],
         limit: 0,
+        readData: true,
       });
       picked = result.files;
     } catch (e: any) {
@@ -182,36 +183,29 @@ export class TripsPage {
   }
 
   private async toBlob(picked: any): Promise<File> {
-    console.log('[toBlob] picked:', JSON.stringify({ name: picked.name, mimeType: picked.mimeType, hasBlob: !!picked.blob, blobType: typeof picked.blob, blobLen: picked.blob?.length, hasPath: !!picked.path }));
-    if (picked.blob instanceof Blob && picked.name) {
-      console.log('[toBlob] using native Blob');
-      return new File([picked.blob], picked.name);
-    }
-    // blob puede ser base64 (con o sin prefijo data:)
-    if (typeof picked.blob === 'string' && picked.blob.length > 0) {
-      let b64 = picked.blob;
-      if (b64.includes(',')) {
-        b64 = b64.split(',')[1]; // quitar prefijo data:...
-      }
+    const b64 = picked.data || picked.blob;
+    if (typeof b64 === 'string' && b64.length > 0) {
+      let clean = b64.includes(',') ? b64.split(',')[1] : b64;
       try {
-        const byteChars = atob(b64);
-        const bytes = new Uint8Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) {
-          bytes[i] = byteChars.charCodeAt(i);
-        }
-        console.log(`[toBlob] base64 -> ${bytes.length} bytes`);
-        return new File([bytes], picked.name ?? 'boarding.pdf');
+        const chars = atob(clean);
+        const bytes = new Uint8Array(chars.length);
+        for (let i = 0; i < chars.length; i++) bytes[i] = chars.charCodeAt(i);
+        return new File([bytes], picked.name ?? 'file');
       } catch (e: any) {
-        console.error('[toBlob] base64 decode failed:', e);
+        throw new Error('Base64 decode failed: ' + e.message);
       }
     }
-    // Fallback: fetch
+    if (picked.blob instanceof Blob) {
+      return new File([picked.blob], picked.name ?? 'file');
+    }
     const url = picked.path ?? picked.uri ?? '';
-    console.log('[toBlob] fetch fallback:', url);
-    const resp = await fetch(url);
-    const blob = await resp.blob();
-    return new File([blob], picked.name ?? 'boarding.pdf');
+    if (url) {
+      const resp = await fetch(url);
+      return new File([await resp.blob()], picked.name ?? 'file');
+    }
+    throw new Error('No file data available');
   }
+
 
   goToItinerary(trip: Trip) {
     this.viewTrip(trip);
