@@ -174,12 +174,24 @@ export class TripsPage {
   }
 
   private async toBlob(picked: any): Promise<File> {
+    // Capacitor file-picker: blob es base64 o Blob
     if (picked.blob instanceof Blob && picked.name) {
-      return new File([picked.blob], picked.name, { type: 'application/pdf' });
+      return new File([picked.blob], picked.name);
     }
-    const resp = await fetch(picked.path ?? picked.uri);
+    // blob es base64 string
+    if (typeof picked.blob === 'string' && picked.blob) {
+      const byteChars = atob(picked.blob);
+      const byteArrays = [];
+      for (let i = 0; i < byteChars.length; i++) {
+        byteArrays.push(byteChars.charCodeAt(i));
+      }
+      const blob = new Blob([new Uint8Array(byteArrays)]);
+      return new File([blob], picked.name ?? 'boarding.pdf');
+    }
+    // Fallback: fetch (funciona en navegador, no en Capacitor con content://)
+    const resp = await fetch(picked.path ?? picked.uri ?? '');
     const blob = await resp.blob();
-    return new File([blob], picked.name ?? 'boarding.pdf', { type: 'application/pdf' });
+    return new File([blob], picked.name ?? 'boarding.pdf');
   }
 
   goToItinerary(trip: Trip) {
