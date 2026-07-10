@@ -126,6 +126,7 @@ export class TripsPage {
     const allImages: any[] = [];
     const filenames: string[] = [];
     let errors = 0;
+    const errorMessages: string[] = [];
 
     for (let i = 0; i < picked.length; i++) {
       const file = picked[i];
@@ -147,14 +148,19 @@ export class TripsPage {
       } catch (e: any) {
         errors++;
         const msg = e?.error?.detail || e?.message || e?.statusText || String(e);
-        console.error('Error procesando ' + filename + ':', msg, e);
-        await this.toast('Error en ' + filename + ': ' + msg, 'danger');
+        errorMessages.push(filename + ': ' + msg);
+        console.error('Error ' + filename + ':', msg, e);
       }
     }
 
     await loading.dismiss();
     this.busy = false;
     this.progress = '';
+
+    // Mostrar errores detallados tras cerrar el loading
+    for (const em of errorMessages) {
+      await this.toast(em, 'danger');
+    }
 
     if (allPasses.length === 0) {
       await this.toast('No se encontraron tarjetas en ningún archivo', 'danger');

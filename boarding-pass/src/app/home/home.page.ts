@@ -46,6 +46,7 @@ export class HomePage {
     const allImages: any[] = [];
     const filenames: string[] = [];
     let errors = 0;
+    const errorMessages: string[] = [];
 
     for (let i = 0; i < picked.length; i++) {
       const file = picked[i];
@@ -66,13 +67,20 @@ export class HomePage {
         }
       } catch (e: any) {
         errors++;
-        console.error(`Error procesando ${filename}:`, e);
+        const msg = e?.error?.detail || e?.message || e?.statusText || String(e);
+        errorMessages.push(filename + ': ' + msg);
+        console.error('Error ' + filename + ':', msg, e);
       }
     }
 
     await loading.dismiss();
     this.busy = false;
     this.progress = '';
+
+    // Mostrar errores detallados tras cerrar el loading
+    for (const em of errorMessages) {
+      await this.toast(em, 'danger');
+    }
 
     if (allPasses.length === 0) {
       await this.toast('No se encontraron tarjetas en ningún archivo', 'danger');
@@ -95,12 +103,33 @@ export class HomePage {
   }
 
   private async toBlob(picked: any): Promise<File> {
+    console.log('[toBlob] picked:', JSON.stringify({ name: picked.name, mimeType: picked.mimeType, hasBlob: !!picked.blob, blobType: typeof picked.blob, blobLen: picked.blob?.length, hasPath: !!picked.path }));
     if (picked.blob instanceof Blob && picked.name) {
-      return new File([picked.blob], picked.name, { type: 'application/pdf' });
+      console.log('[toBlob] using native Blob');
+      return new File([picked.blob], picked.name);
     }
-    const resp = await fetch(picked.path ?? picked.uri);
+    if (typeof picked.blob === 'string' && picked.blob.length > 0) {
+      let b64 = picked.blob;
+      if (b64.includes(',')) {
+        b64 = b64.split(',')[1];
+      }
+      try {
+        const byteChars = atob(b64);
+        const bytes = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+          bytes[i] = byteChars.charCodeAt(i);
+        }
+        console.log('[toBlob] base64 -> ' + bytes.length + ' bytes');
+        return new File([bytes], picked.name ?? 'boarding.pdf');
+      } catch (e: any) {
+        console.error('[toBlob] base64 decode failed:', e);
+      }
+    }
+    const url = picked.path ?? picked.uri ?? '';
+    console.log('[toBlob] fetch fallback:', url);
+    const resp = await fetch(url);
     const blob = await resp.blob();
-    return new File([blob], picked.name ?? 'boarding.pdf', { type: 'application/pdf' });
+    return new File([blob], picked.name ?? 'boarding.pdf');
   }
 
   private async toast(msg: string, color: string) {
