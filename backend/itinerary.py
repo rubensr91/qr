@@ -398,20 +398,28 @@ def _build_daily_calendar(
         for i, d in enumerate(all_dates)
     }
 
-    # --- Vuelos (PDF) ---
+    # --- Vuelos (PDF/imagen) ---
     for f in flights_sorted:
         fd = f.get("flight_date", "")
         if fd not in days:
             continue
-        time_str = f.get("flight_time", "") or ""
+        flight_time = f.get("flight_time", "") or ""
+        gate_close = f.get("gate_close_time", "") or ""
         airline = f.get("airline", "")
         flight_no = f.get("flight", "")
         from_city = _get_city_name(f.get("from", ""))
         to_city = _get_city_name(f.get("to", ""))
+        # Enriquecer descripcion con horas reales si existen
+        time_extra = ""
+        if flight_time:
+            time_extra += f" (salida {flight_time})"
+        if gate_close:
+            time_extra += f" — cierre puertas {gate_close}"
         days[fd]["events"].append({
             "type": "flight_arrival",
-            "time": time_str,
-            "description": f"Llegada {airline}{flight_no} desde {from_city}",
+            "time": flight_time,
+            "gate_close": gate_close,
+            "description": f"Llegada {airline}{flight_no} desde {from_city}{time_extra}",
             "city": to_city,
         })
 
@@ -551,13 +559,15 @@ def _build_daily_calendar(
     for d in days.values():
         d["events"].sort(key=lambda e: e["time"] or "23:59")
 
-    # Calcular bloques libres usando franjas estándar (no duraciones desconocidas)
-    # Mañana: 06:00-12:00, Tarde: 12:00-18:00, Noche: 18:00-24:00
+    # Calcular bloques libres aprovechando horas reales de vuelos/trenes
     for d in days.values():
         events_with_time = [e for e in d["events"] if e["time"]]
         occupied_slots: set[str] = set()
+        earliest_event: int | None = None
         for e in events_with_time:
             h = int(e["time"].split(":")[0])
+            if earliest_event is None or h < earliest_event:
+                earliest_event = h
             if h < 12:
                 occupied_slots.add("morning")
             elif h < 18:
@@ -572,25 +582,40 @@ def _build_daily_calendar(
             continue
 
         free_blocks = []
-        if "morning" not in occupied_slots:
+        # Si sabemos que el primer evento es tarde (ej: vuelo llega a las 09:15),
+        # ajustamos las franjas para que el LLM sepa que la mañana está ocupada
+        # solo hasta cierta hora y el resto del día queda libre
+        if "morning" in occupied_slots and earliest_event is not None and earliest_event < 12:
             free_blocks.append({
                 "start": None, "end": None,
-                "label": "Mañana (06:00—12:00)",
+                "label": "Mañana ocupada hasta ~%d:00 (llegada de vuelo)" % earliest_event,
             })
         if "afternoon" not in occupied_slots:
             free_blocks.append({
                 "start": None, "end": None,
-                "label": "Tarde (12:00—18:00)",
+                "label": "Tarde libre (12:00—18:00)",
             })
         if "evening" not in occupied_slots:
             free_blocks.append({
                 "start": None, "end": None,
-                "label": "Noche (18:00—24:00)",
+                "label": "Noche libre (18:00—24:00)",
             })
+        elif "afternoon" not in occupied_slots:
+            # Si la tarde está libre, mencionamos la noche también aunque esté ocupada
+            pass
+
+        # Si no hay franjas ocupadas, día completamente libre
+        if not occupied_slots:
+            free_blocks = [
+                {"start": None, "end": None, "label": "Mañana (06:00—12:00)"},
+                {"start": None, "end": None, "label": "Tarde (12:00—18:00)"},
+                {"start": None, "end": None, "label": "Noche (18:00—24:00)"},
+            ]
+
         if not free_blocks:
             free_blocks.append({
                 "start": None, "end": None,
-                "label": "Día completo con eventos",
+                "label": "Día completo con eventos — tiempo libre entre medias",
             })
 
         d["free_blocks"] = free_blocks
@@ -698,6 +723,8 @@ A partir del calendario base, genera un JSON con:
 - daily_itinerary usa EXACTAMENTE las fechas del calendario base (no inventes otras).
 - Respeta check-in/check-out: el día de check-out NO sugieras actividades vinculadas a ese hotel.
 - Si un día es de desplazamiento (tren/vuelo), sugiere actividades ligeras o cercanas a la estación/aeropuerto.
+- Si hay "cierre puertas" en un vuelo, sugiere salir hacia el aeropuerto al menos 45 min antes de esa hora.
+- Si la mañana está ocupada por un vuelo, NO sugieras actividades matutinas — empieza desde la tarde.
 - Precios en €. Categorías: €, €€, €€€, €€€€.
 
 === FORMATO DE SALIDA ===

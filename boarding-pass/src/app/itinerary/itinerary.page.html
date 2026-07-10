@@ -120,18 +120,27 @@
           <div class="person-passes" *ngIf="isGroupExpanded(grp.name)">
             <article class="boarding-pass pass-stub" *ngFor="let pass of grp.passes; let j = index">
               <header class="bp-header">
-                <div class="bp-airline">
-                  <span class="bp-airline__name">{{ getAirlineName(pass.airline) || (pass.kind === 'train' ? 'Tren' : pass.format) }}</span>
-                  <span class="bp-airline__code mono">{{ pass.airline || pass.format }}</span>
+                <div class="bp-route-hero">
+                  <div class="bp-route-hero__side">
+                    <span class="bp-route-hero__code">{{ pass.from || '???' }}</span>
+                    <span class="bp-route-hero__label" *ngIf="pass.from">ORIGEN</span>
+                  </div>
+                  <div class="bp-route-hero__connector">
+                    <span class="bp-route-hero__line"></span>
+                    <ion-icon name="airplane" class="bp-route-hero__plane"></ion-icon>
+                    <span class="bp-route-hero__line"></span>
+                  </div>
+                  <div class="bp-route-hero__side bp-route-hero__side--dest">
+                    <span class="bp-route-hero__code">{{ pass.to || '???' }}</span>
+                    <span class="bp-route-hero__label" *ngIf="pass.to">DESTINO</span>
+                  </div>
                 </div>
-                <div class="bp-route">
-                  <span class="board-code board-code--lg">{{ pass.from || '???' }}</span>
-                  <ion-icon name="paper-plane" class="bp-route__plane"></ion-icon>
-                  <span class="board-code board-code--lg">{{ pass.to || '???' }}</span>
-                </div>
-                <div class="bp-class">
-                  <span class="bp-class__label">CLASE</span>
-                  <span class="board-code board-code--md">{{ pass.class || '—' }}</span>
+                <div class="bp-header__meta">
+                  <span class="bp-header__airline">{{ getAirlineName(pass.airline) || (pass.kind === 'train' ? 'Tren' : pass.format) }}</span>
+                  <span class="bp-header__divider">·</span>
+                  <span class="mono bp-header__flight">{{ pass.airline }}{{ pass.flight || pass.train || '' }}</span>
+                  <span class="bp-header__divider" *ngIf="pass.flight_date">·</span>
+                  <span class="mono bp-header__date" *ngIf="pass.flight_date">{{ formatDate(pass) }}</span>
                 </div>
               </header>
 
@@ -145,20 +154,24 @@
                   <span class="bp-info__value mono">{{ pass.pnr || '—' }}</span>
                 </div>
                 <div class="bp-info__cell">
-                  <span class="bp-info__label">VUELO / TREN</span>
-                  <span class="bp-info__value mono">{{ pass.airline }}{{ pass.flight || pass.train || '' }}</span>
+                  <span class="bp-info__label">{{ pass.kind === 'train' ? 'TREN' : 'VUELO' }}</span>
+                  <span class="bp-info__value mono">{{ pass.kind === 'train' ? (pass.train || '—') : (pass.airline || '') + (pass.flight || '') }}</span>
                 </div>
                 <div class="bp-info__cell">
                   <span class="bp-info__label">FECHA</span>
                   <span class="bp-info__value mono">{{ formatDate(pass) }}</span>
                 </div>
-                <div class="bp-info__cell" *ngIf="pass.flight_time">
-                  <span class="bp-info__label">HORA</span>
-                  <span class="bp-info__value mono">{{ pass.flight_time }}</span>
+                <div class="bp-info__cell" *ngIf="pass.class">
+                  <span class="bp-info__label">CLASE</span>
+                  <span class="bp-info__value mono">{{ pass.class }}</span>
                 </div>
-                <div class="bp-info__cell" *ngIf="pass.gate_close_time">
+                <div class="bp-info__cell">
+                  <span class="bp-info__label">HORA</span>
+                  <span class="bp-info__value mono">{{ pass.flight_time || '—' }}</span>
+                </div>
+                <div class="bp-info__cell">
                   <span class="bp-info__label">CIERRE PUERTAS</span>
-                  <span class="bp-info__value mono">{{ pass.gate_close_time }}</span>
+                  <span class="bp-info__value mono">{{ pass.gate_close_time || '—' }}</span>
                 </div>
                 <div class="bp-info__cell" *ngIf="pass.seat">
                   <span class="bp-info__label">ASIENTO</span>

@@ -22,81 +22,90 @@ import requests
 QR_SERVICE_URL = os.getenv("QR_SERVICE_URL", "http://127.0.0.1:8766")
 TIMEOUT = 120  # segundos para PDFs grandes
 
-# Lazy load de easyocr (pesado, ~2GB de modelos)
-_easyocr_reader = None
-
-
-def _get_ocr_reader():
-    """Inicializa easyocr una sola vez (lazy, carga ~2GB de modelos)."""
-    global _easyocr_reader
-    if _easyocr_reader is None:
-        import easyocr
-        _easyocr_reader = easyocr.Reader(['es', 'en'], gpu=False)
-    return _easyocr_reader
-
 
 def _ocr_flight_time(image_path: str) -> dict[str, str | None]:
-    """Extrae hora de salida y cierre de puertas de una imagen via OCR.
+    """Extrae hora de salida y cierre de puertas de una imagen via Tesseract OCR.
 
-    Busca patrones de tabla como:
-      Salida          La puerta cierra    Fecha
-      09:15           08:45               30 dic
+    Busca patrones como:
+      Salida   La puerta cierra a las   Fecha
+      07:00    06:30                    02 ene.
 
-    Usa matching por posicion X para asociar cada hora con su etiqueta.
-
-    Returns dict con 'flight_time' y 'gate_close_time' (None si no se encuentra).
+    Returns dict con 'flight_time' y 'gate_close_time'.
     """
     try:
-        reader = _get_ocr_reader()
-        results = reader.readtext(image_path)
+        import pytesseract
+        from PIL import Image
+        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
     except Exception as e:
-        print(f"[ocr] Error: {e}", file=sys.stderr, flush=True)
+        print(f"[ocr] Error importando pytesseract: {e}", file=sys.stderr, flush=True)
         return {"flight_time": None, "gate_close_time": None}
 
-    # Extraer items con posicion
-    items = []
-    for bbox, text, conf in results:
-        x = int(bbox[0][0])
-        y = int(bbox[0][1])
-        items.append({"text": text.strip(), "x": x, "y": y, "conf": conf})
+    try:
+        img = Image.open(image_path)
+        w, h = img.size
+        if max(w, h) < 1200:
+            img = img.resize((w * 2, h * 2), Image.LANCZOS)
+        text = pytesseract.image_to_string(
+            img, lang='spa+eng', config='--psm 6 --oem 1',
+        )
+    except Exception as e:
+        print(f"[ocr] Error en OCR: {e}", file=sys.stderr, flush=True)
+        return {"flight_time": None, "gate_close_time": None}
 
-    flight_time = None
-    gate_close_time = None
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
 
-    # Buscar etiquetas y asociar con horas por proximidad en X
-    labels = [
-        ("flight_time", re.compile(r"^(?:Salida|Departs|Departure)$", re.IGNORECASE)),
-        ("gate_close", re.compile(r"^(?:La puerta cierra|Gate closes|Cierre puertas|Puerta cierra|Gate closing|Embarking)(?:\s+a\s+las)?$", re.IGNORECASE)),
-    ]
+    flight_time: str | None = None
+    gate_close_time: str | None = None
 
-    time_re = re.compile(r"^(\d{1,2})[.:](\d{2})$")
+    time_re = re.compile(r"(\d{1,2})[:.](\d{2})")
 
-    for field_name, label_pattern in labels:
-        # Encontrar la etiqueta
-        label_items = [it for it in items if label_pattern.match(it["text"])]
-        if not label_items:
+    for i, line in enumerate(lines):
+        has_salida = 'salida' in line.lower()
+        has_puerta = 'puerta' in line.lower()
+
+        if not (has_salida or has_puerta):
             continue
 
-        # Encontrar horas (HH:MM o HH.MM)
-        time_items = [it for it in items if time_re.match(it["text"])]
+        data_line = ''
+        for j in range(i + 1, min(i + 3, len(lines))):
+            if lines[j] and time_re.search(lines[j]):
+                data_line = lines[j]
+                break
 
-        # Buscar la hora mas cercana en X a cada etiqueta (debajo, misma columna)
-        for label in label_items:
-            candidates = [
-                t for t in time_items
-                if abs(t["x"] - label["x"]) < 80 and t["y"] > label["y"]
-            ]
-            if candidates:
-                # La mas cercana en Y (justo debajo)
-                best = min(candidates, key=lambda t: t["y"] - label["y"])
-                m = time_re.match(best["text"])
-                hh, mm = int(m.group(1)), int(m.group(2))
-                if 0 <= hh <= 23 and 0 <= mm <= 59:
-                    time_str = f"{hh:02d}:{mm:02d}"
-                    if field_name == "flight_time":
-                        flight_time = time_str
-                    elif field_name == "gate_close":
-                        gate_close_time = time_str
+        if not data_line:
+            continue
+
+        times = []
+        for m in time_re.finditer(data_line):
+            hh, mm = int(m.group(1)), int(m.group(2))
+            if 0 <= hh <= 23 and 0 <= mm <= 59:
+                times.append(f"{hh:02d}:{mm:02d}")
+
+        if has_salida and len(times) > 0 and flight_time is None:
+            flight_time = times[0]
+        if has_puerta and len(times) > 1 and gate_close_time is None:
+            gate_close_time = times[1]
+        elif has_puerta and len(times) == 1 and gate_close_time is None:
+            gate_close_time = times[0]
+
+    if flight_time is None or gate_close_time is None:
+        all_times = []
+        for m in time_re.finditer(text):
+            hh, mm = int(m.group(1)), int(m.group(2))
+            if 0 <= hh <= 23 and 0 <= mm <= 59:
+                all_times.append(f"{hh:02d}:{mm:02d}")
+
+        seen = set()
+        unique_times = []
+        for t in all_times:
+            if t not in seen:
+                seen.add(t)
+                unique_times.append(t)
+
+        if flight_time is None and len(unique_times) > 0:
+            flight_time = unique_times[0]
+        if gate_close_time is None and len(unique_times) > 1:
+            gate_close_time = unique_times[1]
 
     return {"flight_time": flight_time, "gate_close_time": gate_close_time}
 
@@ -120,7 +129,6 @@ def _service_extract(file_path: str, is_image: bool) -> dict:
             ) from e
 
     if r.status_code != 200:
-        # Reenviamos el detalle del servicio tal cual
         detail = r.json().get("detail", r.text) if r.headers.get("content-type", "").startswith("application/json") else r.text
         raise RuntimeError(f"qr_service devolvio {r.status_code}: {detail}")
 
@@ -130,44 +138,28 @@ def _service_extract(file_path: str, is_image: bool) -> dict:
 def _items_to_tuples(items: list[dict], out_dir: str) -> list[tuple]:
     """Convierte la respuesta JSON del servicio al formato de tuplas
     que espera app.py: (page, fname, b64, text, fmt, origin).
-
-    Los PNGs NO se guardan en disco porque el servicio ya devuelve
-    el crop en base64. El campo fname es solo un identificador.
     """
     tuples = []
     for i, it in enumerate(items):
-        # El servicio devuelve items sin filename; generamos uno
         page = it.get("page", 1)
         fmt = it.get("format", "Unknown")
         text = it.get("text", "")
         b64 = it.get("base64", "")
         origin = it.get("origin", "service")
-        # Identificador unico, sin extension (app.py no usa el archivo)
         fname = f"qr_p{page}_{i+1}_{fmt}.png"
         tuples.append((page, fname, b64, text, fmt, origin))
     return tuples
 
 
 def extract_codes(pdf_path: str, out_dir: str) -> tuple[list[tuple], dict]:
-    """Extrae codigos de un PDF via qr_service.
-
-    Devuelve (codes, text_fields) con el mismo formato que
-    extraer_qr_pdfs.extract_codes() para que app.py no note la diferencia.
-    Los text_fields vienen vacios porque el servicio no extrae texto;
-    app.py los necesita para origen/destino de Renfe. Para mantener
-    esa funcionalidad, importamos extraer_qr_pdfs solo para el text.
-    """
+    """Extrae codigos de un PDF via qr_service."""
     data = _service_extract(pdf_path, is_image=False)
     items = data.get("items", [])
     codes = _items_to_tuples(items, out_dir)
 
-    # El servicio no extrae texto del PDF (solo recorta codigos).
-    # Para mantener la extraccion de origen/destino/etc de Renfe,
-    # seguimos usando extraer_qr_pdfs.extract_text_fields() en local.
-    # Esta es la UNICA llamada al script legacy: solo para el texto.
     text_fields = {}
     try:
-        import extraer_qr_pdfs  # noqa: E402  - import solo para text fields
+        import extraer_qr_pdfs  # noqa: E402
         text_fields = extraer_qr_pdfs.extract_text_fields(pdf_path)
     except Exception:
         pass
@@ -176,16 +168,11 @@ def extract_codes(pdf_path: str, out_dir: str) -> tuple[list[tuple], dict]:
 
 
 def extract_codes_from_image(image_path: str, out_dir: str) -> tuple[list[tuple], dict]:
-    """Extrae codigos de una imagen via qr_service + OCR de hora de salida.
-
-    Returns (codes, ocr_data) donde ocr_data = {flight_time, gate_close_time}.
-    Para imagenes no hay text_fields (Renfe no tiene imagenes sueltas).
-    """
+    """Extrae codigos de una imagen via qr_service + OCR de hora de salida."""
     data = _service_extract(image_path, is_image=True)
     items = data.get("items", [])
     codes = _items_to_tuples(items, out_dir)
 
-    # OCR para extraer hora de salida y cierre de puertas
     ocr_data = _ocr_flight_time(image_path)
 
     return codes, ocr_data
