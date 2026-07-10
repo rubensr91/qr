@@ -66,7 +66,7 @@ def _ocr_flight_time(image_path: str) -> dict[str, str | None]:
     # Buscar etiquetas y asociar con horas por proximidad en X
     labels = [
         ("flight_time", re.compile(r"^(?:Salida|Departs|Departure)$", re.IGNORECASE)),
-        ("gate_close", re.compile(r"^(?:La puerta cierra|Gate closes|Cierre puertas|Puerta cierra|Gate closing|Embarking)$", re.IGNORECASE)),
+        ("gate_close", re.compile(r"^(?:La puerta cierra|Gate closes|Cierre puertas|Puerta cierra|Gate closing|Embarking)(?:\s+a\s+las)?$", re.IGNORECASE)),
     ]
 
     time_re = re.compile(r"^(\d{1,2})[.:](\d{2})$")
