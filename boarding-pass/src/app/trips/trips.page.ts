@@ -220,28 +220,29 @@ export class TripsPage {
     });
   }
 
-  /** Extrae el código de aeropuerto de origen del primer vuelo. */
+  /** Extrae el código de origen del primer vuelo o tren. */
   getOriginCode(trip: Trip): string {
-    // Primero vuelos
     const flight = trip.pass_data.passes.find(x => x.kind === 'flight');
     if (flight?.from) return flight.from as string;
-    // Luego trenes
-    const train = trip.pass_data.passes.find(x => x.kind === 'train' && (x as any).train);
-    if (train) return 'TREN';
-    return (trip.trip_name?.match(/\((\w+)\)/)?.[1]) || '—';
+    const train = trip.pass_data.passes.find(x => x.kind === 'train');
+    if (train?.from) {
+      const from = train.from as string;
+      return from.includes(' - ') ? from.split(' - ')[0] : from;
+    }
+    return '—';
   }
 
-  /** Extrae el código de destino del primer vuelo (no del último — para
-   *  vuelta a origen mostraría mismo sitio). Para viaje redondo
-   *  BCN→SVQ, SVQ→BCN muestra SVQ, no BCN. */
+  /** Extrae el destino del primer vuelo o tren (ida, no vuelta). */
   getDestCode(trip: Trip): string {
     const flights = trip.pass_data.passes.filter(x => x.kind === 'flight');
     if (flights.length) {
-      const first = flights[0];
-      return (first?.to as string) || '—';
+      return (flights[0]?.to as string) || '—';
     }
-    const train = trip.pass_data.passes.find(x => x.kind === 'train' && (x as any).train);
-    if (train) return (train as any).train || 'TREN';
+    const train = trip.pass_data.passes.find(x => x.kind === 'train');
+    if (train?.to) {
+      const to = train.to as string;
+      return to.includes(' - ') ? to.split(' - ')[0] : to;
+    }
     return '—';
   }
 

@@ -801,23 +801,31 @@ def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -
 
     dests = _real_flight_destinations(flights, seg_hotels, origin)
     for t in trains:
-        train = t.get("train", "")
-        date = t.get("flight_date", "")
-        label = f"Tren {train}" if train else "Tren"
-        if date:
-            label += f" {_format_short_date(date)}"
-        if label not in dests:
-            dests.append(label)
+        city = _get_city_name(t.get("to", ""))
+        if city and city != origin and city not in dests:
+            dests.append(city)
+        elif not city:
+            train = t.get("train", "")
+            date = t.get("flight_date", "")
+            label = f"Tren {train}" if train else "Tren"
+            if date:
+                label += f" {_format_short_date(date)}"
+            if label not in dests:
+                dests.append(label)
     for s in seg_hotels:
         city = s.get("city", "")
         if city and city != origin and city not in dests:
             dests.append(city)
 
     if dests:
-        return f"Viaje a {' y '.join(dests[:3])}"
+        prefix = "Viaje en tren a " if (not flights and trains) else "Viaje a "
+        return f"{prefix}{' y '.join(dests[:3])}"
     if flights:
         return f"Viaje a {_get_city_name(flights[0].get('to',''))}"
     if trains:
+        to_city = _get_city_name(trains[0].get("to", ""))
+        if to_city:
+            return f"Viaje en tren a {to_city}"
         train_no = trains[0].get("train", "?")
         return f"Tren {train_no}"
     return "Viaje sin destino"
