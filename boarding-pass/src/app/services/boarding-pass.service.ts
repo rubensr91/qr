@@ -15,6 +15,7 @@ export interface Pass {
   flight?: string;
   flight_date?: string | null;
   flight_time?: string | null;
+  gate_close_time?: string | null;
   train?: string;
   class?: string;
   seat?: string;
