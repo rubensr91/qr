@@ -6,6 +6,53 @@ App Ionic + Angular que extrae datos de tarjetas de embarque (vuelos y trenes) d
 
 ---
 
+## 🚀 Guía rápida — próxima sesión
+
+### Escenario A: Solo arrancar (misma URL, APK ya instalada)
+
+```bash
+# Terminal 1
+cd qr_service && python -m uvicorn main:app --host 0.0.0.0 --port 8766
+
+# Terminal 2 (desde raíz)
+python -m uvicorn backend.app:app --host 0.0.0.0 --port 8765
+
+# Terminal 3
+"C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://localhost:8765
+```
+
+Verificar: `curl https://xxx.trycloudflare.com/health` (sustituir xxx por la URL que aparezca).
+La APK del móvil ya apunta a la URL anterior → si el túnel dio una URL **distinta**, hay que recompilar (Escenario B).
+
+### Escenario B: URL del túnel cambió → recompilar APK
+
+```bash
+# 1. Arrancar servicios + túnel (Escenario A)
+# 2. Sustituir NUEVA_URL y pegar:
+echo 'export const environment = { production: true, apiUrl: "https://NUEVA_URL.trycloudflare.com" };' > boarding-pass/src/environments/environment.prod.ts && cd boarding-pass && npx ng build --configuration production && npx cap sync android && cd android && ./gradlew assembleDebug && cd .. && cp android/app/build/outputs/apk/debug/app-debug.apk ../boarding-pass-debug.apk
+# 3. Transferir boarding-pass-debug.apk al móvil e instalar
+```
+
+### Escenario C: Primera vez desde cero (sin nada instalado)
+
+Ver secciones detalladas abajo:
+1. Instalar dependencias → "Stack técnico"
+2. Arrancar servicios → "Cómo arrancar"
+3. Instalar cloudflared → "Despliegue remoto"
+4. Build APK → "Build de APK Android"
+
+### 🧠 Para máxima agilidad
+
+Lo que más ralentiza es recompilar la APK cada vez que la URL del túnel cambia. Soluciones:
+
+| Solución | Esfuerzo | Resultado |
+|---|---|---|
+| **Named tunnel** (subdominio fijo tipo `api.tudominio.com`) | 15 min (cuenta Cloudflare + dominio) | URL permanente, nunca recompilar |
+| **Hacer runtime la URL** (settings en la app) | 30 min de código | Cambiar URL desde el móvil sin recompilar |
+| **Quick tunnel + recompilar** (actual) | 2 min cada vez | Funciona pero tedioso si el túnel se cae |
+
+---
+
 ## Arquitectura — 3 servicios
 
 ```
@@ -330,6 +377,7 @@ sdk.dir=C\:\\Users\\Rubén\\AppData\\Local\\Android\\Sdk
 ```bash
 # 1. Actualizar la URL del backend en environment.prod.ts
 #    (si cambió el túnel de Cloudflare)
+#    EJ: https://nuevo-aleatorio.trycloudflare.com
 code boarding-pass/src/environments/environment.prod.ts
 
 # 2. Compilar Angular con configuración production
@@ -348,13 +396,21 @@ cd android
 #    boarding-pass/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
+### 🏎️ One-liner rebuild (copia y pega)
+
+Cuando solo cambia la URL del túnel y ya tienes todo instalado:
+
+```bash
+cd boarding-pass && npx ng build --configuration production && npx cap sync android && cd android && ./gradlew assembleDebug && cd .. && cp android/app/build/outputs/apk/debug/app-debug.apk ../boarding-pass-debug.apk
+```
+
+Tarda ~1 minuto. Al final tienes el APK actualizado en la raíz.
+
 ### Output esperado
 
 ```
-app/build/outputs/apk/debug/app-debug.apk   # ~5.4 MB
+app/build/outputs/apk/debug/app-debug.apk   # ~5.4 MB → boarding-pass-debug.apk
 ```
-
-Se copia a la raíz del proyecto como `boarding-pass-debug.apk` para acceso rápido.
 
 ### Instalación en el móvil
 
