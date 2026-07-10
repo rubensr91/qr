@@ -146,7 +146,9 @@ export class TripsPage {
         }
       } catch (e: any) {
         errors++;
-        console.error(`Error procesando ${filename}:`, e);
+        const msg = e?.error?.detail || e?.message || e?.statusText || String(e);
+        console.error('Error procesando ' + filename + ':', msg, e);
+        await this.toast('Error en ' + filename + ': ' + msg, 'danger');
       }
     }
 
@@ -174,22 +176,33 @@ export class TripsPage {
   }
 
   private async toBlob(picked: any): Promise<File> {
-    // Capacitor file-picker: blob es base64 o Blob
+    console.log('[toBlob] picked:', JSON.stringify({ name: picked.name, mimeType: picked.mimeType, hasBlob: !!picked.blob, blobType: typeof picked.blob, blobLen: picked.blob?.length, hasPath: !!picked.path }));
     if (picked.blob instanceof Blob && picked.name) {
+      console.log('[toBlob] using native Blob');
       return new File([picked.blob], picked.name);
     }
-    // blob es base64 string
-    if (typeof picked.blob === 'string' && picked.blob) {
-      const byteChars = atob(picked.blob);
-      const byteArrays = [];
-      for (let i = 0; i < byteChars.length; i++) {
-        byteArrays.push(byteChars.charCodeAt(i));
+    // blob puede ser base64 (con o sin prefijo data:)
+    if (typeof picked.blob === 'string' && picked.blob.length > 0) {
+      let b64 = picked.blob;
+      if (b64.includes(',')) {
+        b64 = b64.split(',')[1]; // quitar prefijo data:...
       }
-      const blob = new Blob([new Uint8Array(byteArrays)]);
-      return new File([blob], picked.name ?? 'boarding.pdf');
+      try {
+        const byteChars = atob(b64);
+        const bytes = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+          bytes[i] = byteChars.charCodeAt(i);
+        }
+        console.log(`[toBlob] base64 -> ${bytes.length} bytes`);
+        return new File([bytes], picked.name ?? 'boarding.pdf');
+      } catch (e: any) {
+        console.error('[toBlob] base64 decode failed:', e);
+      }
     }
-    // Fallback: fetch (funciona en navegador, no en Capacitor con content://)
-    const resp = await fetch(picked.path ?? picked.uri ?? '');
+    // Fallback: fetch
+    const url = picked.path ?? picked.uri ?? '';
+    console.log('[toBlob] fetch fallback:', url);
+    const resp = await fetch(url);
     const blob = await resp.blob();
     return new File([blob], picked.name ?? 'boarding.pdf');
   }

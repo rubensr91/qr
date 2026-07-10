@@ -97,12 +97,22 @@ const SESSION_KEY = 'bp_session_id';
 export class BoardingPassService {
   constructor(private http: HttpClient) {}
 
+  private _headers(extra?: Record<string, string>): { headers: HttpHeaders } {
+    let h = new HttpHeaders(extra || {});
+    if (environment.apiUrl.includes('loca.lt')) {
+      h = h.set('Bypass-Tunnel-Reminder', 'true');
+    }
+    return { headers: h };
+  }
+
   // --- PDF extraction ---
 
   uploadPdf(file: File): Observable<ExtractResponse> {
     const fd = new FormData();
     fd.append('file', file, file.name);
-    return this.http.post<ExtractResponse>(`${environment.apiUrl}/api/extract`, fd);
+    return this.http.post<ExtractResponse>(
+      `${environment.apiUrl}/api/extract`, fd, this._headers()
+    );
   }
 
   // --- Trips CRUD ---
@@ -118,7 +128,11 @@ export class BoardingPassService {
   }
 
   private sessionHeaders(): { headers: HttpHeaders } {
-    return { headers: new HttpHeaders({ 'X-Session-Id': this.getSessionId() }) };
+    let h = new HttpHeaders({ 'X-Session-Id': this.getSessionId() });
+    if (environment.apiUrl.includes('loca.lt')) {
+      h = h.set('Bypass-Tunnel-Reminder', 'true');
+    }
+    return { headers: h };
   }
 
   /** Lista todos los viajes de la sesion actual. */

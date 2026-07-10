@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Permitir HTTP a IPs privadas (LAN) en Android 14+ -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">10.45.7.13</domain>
-        <domain includeSubdomains="false">10.45.7.189</domain>
-    </domain-config>
-    <!-- Permitir HTTP a localhost para pruebas -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">localhost</domain>
-        <domain includeSubdomains="false">10.0.2.2</domain>
-    </domain-config>
+    <!-- Permitir HTTP a TODO (incluyendo IPs privadas). -->
+    <!-- domain-config NO acepta IPs como domain, por eso usamos base-config. -->
+    <!-- NOTA: networkSecurityConfig ANULA android:usesCleartextTraffic -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>
