@@ -107,6 +107,7 @@ qr_extractor/
 │       └── services/         # boarding-pass.service.ts, itinerary.service.ts
 │
 ├── extraer_qr_pdfs.py        # Algoritmo legacy: extrae QR de PDFs + text_fields
+├── boarding-pass-debug.apk   # APK compilada (production, apunta a Cloudflare Tunnel)
 ├── start.sh                  # Script bash de arranque (Linux/Mac, no usar en Windows)
 ├── AGENT.md                  # Este archivo
 └── README.md                 # Documentación original
@@ -217,6 +218,69 @@ Tabla `trips`:
 
 ---
 
+---
+
+## Despliegue remoto — Cloudflare Tunnel
+
+Cloudflare Tunnel expone el backend local a internet sin abrir puertos en el router. Perfecto para probar la app desde el móvil con la APK.
+
+### Cómo funciona
+
+```
+Móvil (APK) → Cloudflare Edge → cloudflared (tu PC) → localhost:8765 → backend
+```
+
+### Instalación de cloudflared
+
+```bash
+winget install cloudflare.cloudflared --accept-package-agreements --silent
+```
+
+Se instala en `C:\Program Files (x86)\cloudflared\cloudflared.exe`.
+
+### Arrancar túnel rápido (gratis, sin cuenta)
+
+```bash
+"C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://localhost:8765
+```
+
+Esto da una URL tipo: `https://palabras-aleatorias.trycloudflare.com`
+
+### ⚠️ Limitaciones del túnel rápido
+
+| Aspecto | Detalle |
+|---|---|
+| URL | **Cambia cada vez** que reinicias el túnel. Es aleatoria. |
+| PC requerido | Tu PC debe estar **encendido** y el proceso de cloudflared corriendo. |
+| Sin SLA | Sin garantía de uptime. Para uso en pruebas. |
+| Actualizar APK | Si la URL cambia, hay que recompilar la APK con la nueva URL. |
+
+### Para URL fija (named tunnel)
+
+1. Crear cuenta gratuita en Cloudflare
+2. Añadir un dominio (o usar uno existente)
+3. Configurar un named tunnel:
+   ```bash
+   cloudflared tunnel create boarding-pass-tunnel
+   cloudflared tunnel route dns boarding-pass-tunnel api.midominio.com
+   cloudflared tunnel run boarding-pass-tunnel
+   ```
+4. La URL `https://api.midominio.com` es permanente → no requiere recompilar la APK cada vez.
+
+### Flujo completo para desplegar con túnel
+
+```bash
+# 1. Arrancar los 3 servicios locales (ver "Cómo arrancar")
+# 2. Arrancar el túnel
+"C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://localhost:8765
+# 3. Copiar la URL que aparece (ej: https://xxx.trycloudflare.com)
+# 4. Actualizar environment.prod.ts
+# 5. Compilar APK (ver "Build de APK Android")
+# 6. Instalar APK en el móvil
+```
+
+---
+
 ## Stack técnico
 
 | Capa | Tecnología |
@@ -229,6 +293,74 @@ Tabla `trips`:
 | LLM | DeepSeek (itinerarios) |
 | BD | SQLite |
 | Android | Capacitor + Gradle |
+
+---
+
+## Build de APK Android (Capacitor)
+
+### Requisitos previos
+
+| Herramienta | Versión mínima | Cómo verificar |
+|---|---|---|
+| JDK | **21** (¡NO 17! Capacitor requiere 21) | `java -version` |
+| Android SDK | platforms 34+, build-tools 34+ | `ls "$ANDROID_HOME/platforms"` |
+| Gradle | 8.14+ (wrapper incluido) | `./gradlew --version` |
+
+### ⚠️ JDK: problema común
+
+El `JAVA_HOME` del sistema suele apuntar a JDK 17, pero Capacitor Android requiere JDK 21.
+Para evitarlo, se fija el JDK en `boarding-pass/android/gradle.properties`:
+
+```properties
+org.gradle.java.home=C\:\\Program Files\\Microsoft\\jdk-21.0.11.10-hotspot
+```
+
+Esto sobreescribe `JAVA_HOME` solo para el build de Gradle.
+
+### Android SDK
+
+El SDK se instaló en `C:\Users\Rubén\AppData\Local\Android\Sdk`. Si falta `local.properties`, créalo:
+
+```properties
+sdk.dir=C\:\\Users\\Rubén\\AppData\\Local\\Android\\Sdk
+```
+
+### Build completo paso a paso
+
+```bash
+# 1. Actualizar la URL del backend en environment.prod.ts
+#    (si cambió el túnel de Cloudflare)
+code boarding-pass/src/environments/environment.prod.ts
+
+# 2. Compilar Angular con configuración production
+#    (reemplaza environment.ts → environment.prod.ts)
+cd boarding-pass
+npx ng build --configuration production
+
+# 3. Sincronizar web assets con Android
+npx cap sync android
+
+# 4. Compilar APK
+cd android
+./gradlew assembleDebug
+
+# 5. El APK se genera en:
+#    boarding-pass/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Output esperado
+
+```
+app/build/outputs/apk/debug/app-debug.apk   # ~5.4 MB
+```
+
+Se copia a la raíz del proyecto como `boarding-pass-debug.apk` para acceso rápido.
+
+### Instalación en el móvil
+
+1. Transferir `boarding-pass-debug.apk` al móvil (USB, Google Drive, Telegram, etc.)
+2. En Android: abrir el archivo → permitir "Instalar desde orígenes desconocidos"
+3. La app apunta a la URL configurada en `environment.prod.ts`
 
 ---
 
@@ -257,3 +389,19 @@ billetes.madrid.pdf                  # OUIGO Madrid
 | `flight_time: null` en PDFs | El código IATA de Ryanair no incluye hora | Normal — usar OCR en imagen o aceptar null |
 | Tesseract `spa` no disponible | Falta `spa.traineddata` | Usar `spa+eng` o descargar modelo español |
 | `gate_close_time` missing en JSON | OCR no lo encontró | Campo opcional — normal si no hay "cierre puertas" en la imagen |
+| `boarding-pass-debug.apk` no se encuentra | No se ha hecho el build aún | Seguir pasos en "Build de APK Android" |
+| `invalid source release: 21` al buildear APK | JAVA_HOME apunta a JDK 17, pero Capacitor requiere JDK 21 | Añadir `org.gradle.java.home=ruta_al_jdk21` en `gradle.properties` |
+| `SDK location not found` al buildear APK | Falta `local.properties` en `boarding-pass/android/` | Crear `local.properties` con `sdk.dir=C\\:\\\\Users\\\\Rubén\\\\AppData\\\\Local\\\\Android\\\\Sdk` |
+| `cloudflared: command not found` | cloudflared instalado pero no en PATH de Git Bash | Usar ruta completa: `"C:\Program Files (x86)\cloudflared\cloudflared.exe"` |
+| El túnel de Cloudflare no responde | El backend local (puerto 8765) no está corriendo | Verificar con `curl http://127.0.0.1:8765/health` |
+| La APK desde el móvil no conecta | URL del túnel ha cambiado (quick tunnel) | Recompilar APK con la nueva URL del túnel |
+| La APK desde el móvil no conecta | El túnel no está corriendo | Arrancar cloudflared tunnel --url http://localhost:8765 |
+
+---
+
+## Historial de cambios relevantes
+
+| Fecha | Tag | Cambios |
+|---|---|---|
+| 2026-07-10 | v1.2.0 | OCR Tesseract (reemplazo de easyocr), UI itinerario rediseñada |
+| 2026-07-10 | — | **Cloudflare Tunnel**: instalado cloudflared, creado túnel a localhost:8765. **APK Android**: compilada con production config apuntando al túnel. Fijado JDK 21 para Gradle, creado `local.properties`. Documentado en AGENT.md. |
