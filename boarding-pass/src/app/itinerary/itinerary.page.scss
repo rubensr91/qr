@@ -699,6 +699,80 @@
   padding: 0 var(--space-4) var(--space-4);
 }
 
+// --- Static header (single passenger, no accordion) ---
+.person-header--static {
+  cursor: default;
+
+  &:hover {
+    background: var(--paper);
+  }
+
+  .person-header__chevron {
+    display: none;
+  }
+}
+
+// --- QR barcode enlargement overlay ---
+.bp-barcode__img {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+
+  &:active {
+    opacity: 0.7;
+  }
+}
+
+.qr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  animation: qrFadeIn 0.2s ease;
+
+  &__content {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    img {
+      max-width: 100%;
+      max-height: 85vh;
+      display: block;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+    }
+  }
+
+  &__close {
+    position: fixed;
+    top: var(--space-4);
+    right: var(--space-4);
+    --color: var(--navy-muted);
+    --background: rgba(255, 255, 255, 0.8);
+    --border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    z-index: 10001;
+
+    ion-icon {
+      font-size: 2rem;
+    }
+  }
+}
+
+@keyframes qrFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 // --- Botón crear itinerario ---
 .btn-itinerary {
   --background: linear-gradient(135deg, var(--teal), var(--teal-dark, #0a7a7e));

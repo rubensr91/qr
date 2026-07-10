@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { LoadingController, ToastController } from '@ionic/angular';
+import { ScreenBrightness } from '@capacitor-community/screen-brightness';
 import { BarcodeImage, BoardingPassService, Pass, TravelSegment } from '../services/boarding-pass.service';
 import {
   DailyPlan,
@@ -61,6 +62,9 @@ export class ItineraryPage {
   generating = false;
   error = '';
   activeTab: 'plan' | 'cards' | 'bookings' | 'eat' | 'sleep' | 'visit' | 'tips' = 'plan';
+
+  enlargedBarcode: BarcodeImage | null = null;
+  private previousBrightness: number | undefined;
 
   constructor(
     private router: Router,
@@ -173,6 +177,29 @@ export class ItineraryPage {
 
   imageFor(pass: Pass): BarcodeImage | undefined {
     return this.images.find((i) => i.page === pass.page);
+  }
+
+  async openBarcode(img: BarcodeImage) {
+    this.enlargedBarcode = img;
+    try {
+      const { brightness } = await ScreenBrightness.getBrightness();
+      this.previousBrightness = brightness;
+      await ScreenBrightness.setBrightness({ brightness: 1.0 });
+    } catch (e) {
+      console.warn('ScreenBrightness no disponible:', e);
+    }
+  }
+
+  async closeBarcode() {
+    this.enlargedBarcode = null;
+    try {
+      if (this.previousBrightness !== undefined) {
+        await ScreenBrightness.setBrightness({ brightness: this.previousBrightness });
+        this.previousBrightness = undefined;
+      }
+    } catch (e) {
+      console.warn('ScreenBrightness restauro no disponible:', e);
+    }
   }
 
   /** Formatea fecha: DD/MM si año inferido, DD/MM/YYYY si explícito. */
