@@ -25,10 +25,10 @@
       <ion-icon name="airplane-outline"></ion-icon>
     </div>
     <h2>Sin viajes guardados</h2>
-    <p>Sube archivos desde la pantalla principal y guárdalos para verlos aquí.</p>
-    <ion-button class="primary-cta" (click)="goHome()">
+    <p>Sube archivos pdf o imágenes de tus tarjetas de embarque para crear viajes.</p>
+    <ion-button class="primary-cta" (click)="pickAndUpload()" [disabled]="busy">
       <ion-icon name="cloud-upload-outline" slot="start"></ion-icon>
-      Subir archivos
+      {{ busy ? 'Procesando ' + progress + '…' : 'Subir archivos' }}
     </ion-button>
   </div>
 
