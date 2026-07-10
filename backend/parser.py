@@ -64,6 +64,34 @@ def _parse_iata_bcbp(text, year=None):
     if not doy_str.isdigit():
         return None
     flight_date = _doy_to_date(year or date.today().year, int(doy_str))
+
+    # Intentar extraer hora de salida de la seccion de datos variables (pos 56+)
+    # Algunas aerolineas incluyen el campo condicional "14" (Departure Time).
+    # Formatos posibles en variable data:
+    #   - "14HHMM"        (6 chars: campo 14 + 4 digitos HHMM)
+    #   - "1404HHMM"      (8 chars: campo 14 + len 04 + 4 digitos)
+    #   - "+HHMM" o " HH:MM" en Ryanair (no incluido, pero otras lo hacen)
+    flight_time = None
+    var_data = text[56:]
+    # Buscar campo IATA "14" seguido de HHMM
+    m = re.search(r"14\d{2}(\d{2})(\d{2})", var_data)
+    if m:
+        hh, mm = int(m.group(1)), int(m.group(2))
+        if 0 <= hh <= 23 and 0 <= mm <= 59:
+            flight_time = f"{hh:02d}:{mm:02d}"
+    # Fallback: buscar cualquier HH:MM o HHMM en datos variables
+    if not flight_time:
+        m = re.search(r"(\d{2}):(\d{2})", var_data)
+        if m:
+            hh, mm = int(m.group(1)), int(m.group(2))
+            if 0 <= hh <= 23 and 0 <= mm <= 59:
+                flight_time = f"{hh:02d}:{mm:02d}"
+    if not flight_time:
+        m = re.search(r"\b([01]\d|2[0-3])([0-5]\d)\b", var_data)
+        if m:
+            hh, mm = int(m.group(1)), int(m.group(2))
+            flight_time = f"{hh:02d}:{mm:02d}"
+
     return {
         "format": "IATA_BCBP",
         "kind": "flight",
@@ -74,6 +102,7 @@ def _parse_iata_bcbp(text, year=None):
         "airline": airline,
         "flight": flight,
         "flight_date": flight_date.isoformat() if flight_date else None,
+        "flight_time": flight_time,
         "class": clas,
         "seat": seat,
         "check_in_seq": chkseq,

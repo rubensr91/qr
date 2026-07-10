@@ -337,6 +337,23 @@ def _extract_text_fields_from_doc(doc):
         if m:
             page_fields["name"] = m.group(1).strip()
 
+        # Hora de salida (varios formatos segun aerolinea)
+        # Ryanair: "Departs", "Departure", "Salida"
+        # Vueling: "Salida", "Hora", "Departure"
+        # Iberia: "Salida", "Hora"
+        time_patterns = [
+            r"(?:Hora de salida|Hora salida|Salida|Departs|Departure|Hora)[:\s]*\n?\s*(\d{1,2}[:.]\d{2})",
+            r"(?:Salida|Hora)[:\s]*\n?\s*(\d{1,2}[:.]\d{2})",
+            r"(\d{1,2}[:.]\d{2})\s*(?:Hora de salida|Salida|Departs)",
+        ]
+        for pat in time_patterns:
+            tm = re.search(pat, text, re.IGNORECASE)
+            if tm:
+                raw_time = tm.group(1).replace(".", ":")
+                h, mn = raw_time.split(":")
+                page_fields["flight_time"] = f"{int(h):02d}:{int(mn):02d}"
+                break
+
         if page_fields:
             fields_by_page[page_num + 1] = page_fields
 
