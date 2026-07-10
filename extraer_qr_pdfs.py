@@ -272,24 +272,33 @@ def _extract_text_fields_from_doc(doc):
         text = page.get_text()
         page_fields = {}
 
-        # Origen (vuelos: "Origen:", trenes: "Origen", "Desde", "Salida de")
-        m = re.search(r"(?:Origen|Desde|Salida\s+de)\s*:?\s*\n?\s*(.+)", text, re.IGNORECASE)
+        # Origen (ciudad o estacion, texto corto)
+        m = re.search(r"(?:Origen|Desde|Salida\s+de)\s*:?\s*\n?\s*(\S[\S ]{0,40})", text, re.IGNORECASE)
         if not m:
-            m = re.search(r"Origen\s*\n\s*(.+)", text, re.IGNORECASE)
+            m = re.search(r"Origen\s*\n\s*(\S[\S ]{0,40})", text, re.IGNORECASE)
         if m:
-            page_fields["from"] = m.group(1).strip()
+            val = m.group(1).strip()
+            # Filtrar falsos positivos: texto demasiado generico
+            if not any(w in val.lower() for w in ('minutos','antes','salida','llegada','añadir','puedes','información','billete','tarjeta')):
+                page_fields["from"] = val
 
-        # Destino (vuelos: "Destino:", trenes: "Destino", "Hasta", "Llegada a")
-        m = re.search(r"(?:Destino|Hasta|Llegada\s+a)\s*:?\s*\n?\s*(.+)", text, re.IGNORECASE)
+        # Destino (ciudad o estacion, texto corto)
+        m = re.search(r"(?:Destino|Hasta|Llegada\s+a)\s*:?\s*\n?\s*(\S[\S ]{0,40})", text, re.IGNORECASE)
         if not m:
-            m = re.search(r"Destino\s*\n\s*(.+)", text, re.IGNORECASE)
+            m = re.search(r"Destino\s*\n\s*(\S[\S ]{0,40})", text, re.IGNORECASE)
         if m:
-            page_fields["to"] = m.group(1).strip()
+            val = m.group(1).strip()
+            if not any(w in val.lower() for w in ('minutos','antes','salida','llegada','añadir','puedes','información','billete','tarjeta')):
+                page_fields["to"] = val
 
-        # Plaza / Asiento (con o sin dos puntos)
-        m = re.search(r"(?:Plaza|Asiento)\s*:?\s*\n?\s*(\S+)", text, re.IGNORECASE)
+        # Plaza / Asiento: patron de asiento real (digitos+letra, ej: "14A", "23B")
+        m = re.search(r"(?:Plaza|Asiento|Coche)\s*:?\s*\n?\s*(\d{1,2}\s*[A-Z])", text, re.IGNORECASE)
+        if not m:
+            m = re.search(r"(?:Plaza|Asiento)\s*:?\s*\n?\s*(\S+)", text, re.IGNORECASE)
         if m:
-            page_fields["seat"] = m.group(1).strip()
+            val = m.group(1).strip()
+            if len(val) <= 6 and not val.lower() in ('información','importante','billete'):
+                page_fields["seat"] = val
 
         # Coche
         m = re.search(r"Coche:\s*\n?\s*(\S+)", text, re.IGNORECASE)
@@ -323,23 +332,67 @@ def _extract_text_fields_from_doc(doc):
                 pass
 
         # Nombre del pasajero (varios formatos segun operador)
-        # 1) Etiqueta explicita "Pasajero:", "Titular:", "Nombre:", "Viajero:"
-        m = re.search(
-            r"(?:Pasajero|Titular|Nombre|Viajero)\s*:?\s*\n?\s*(.+)",
-            text, re.IGNORECASE,
-        )
-        # 2) Formato Renfe/OUIGO: linea "DNI ó DOC.ID:" + DNI + nombre
-        #    El nombre esta justo despues del DNI, en formato "APELLIDO.NOMBRE"
-        if not m:
-            m = re.search(
-                r"DNI\s*[óo]?\s*DOC\.?ID:?\s*\n\s*\*+\S+\s*\n\s*(\S+)",
-                text, re.IGNORECASE,
-            )
-        # 3) Fallback: "Sr. Nombre" o "Sra. Nombre"
-        if not m:
-            m = re.search(r"S(?:r|ra)\.\s+(\S[\S ]+)", text)
+        m = None
+        # 1) Etiqueta + formato APELLIDO/NOMBRE o Nombre Apellido
+        for pat in [
+            r"(?:Pasajero|Titular|Nombre|Viajero|Viajero\s+General)\s*:?\s*\n?\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s/]{3,40})",
+            r"DNI\s*[óo]?\s*DOC\.?ID:?\s*\n\s*\*+\S+\s*\n\s*(\S+)",
+            r"S(?:r|ra)\.\s+(\S[\S ]+)",
+            # OUIGO: nombre en formato "Nombre Apellido" en linea propia
+            r"\n([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+ [A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?: [A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)?)\n",
+        ]:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                break
         if m:
-            page_fields["name"] = m.group(1).strip()
+            val = m.group(1).strip()
+            if '/' in val or (' ' in val and len(val) >= 6) or len(val) >= 4:
+                # Evitar falsos positivos
+                if not any(w in val.lower() for w in ('minutos','antes','salida','mascotas','olvides','equipaje','billete','ouigo')):
+                    page_fields["name"] = val
+
+        # OUIGO: origen/destino en formato "Ciudad - Estacion" (lineas propias)
+        if not page_fields.get("from") or not page_fields.get("to"):
+            ouigo_cities = re.findall(
+                r"^([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+ - .+)$",
+                text, re.MULTILINE,
+            )
+            real = [c.strip() for c in ouigo_cities if len(c.strip()) > 8]
+            if len(real) >= 2:
+                page_fields["from"] = real[0]
+                page_fields["to"] = real[-1]
+
+        # OUIGO: nombre (antes de "Viajero General")
+        if not page_fields.get("name"):
+            m = re.search(
+                r"([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+ [A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?: [A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)?)\s*\n\s*Viajero General",
+                text,
+            )
+            if m:
+                page_fields["name"] = m.group(1).strip()
+
+        # OUIGO: tren (5 digitos tras la fecha)
+        m = re.search(r"\d{2}\.\d{2}\.\d{4}\s*\n\s*(\d{5})", text)
+        if m:
+            page_fields["train"] = m.group(1)
+
+        # OUIGO: coche (digito tras la hora)
+        m = re.search(r"\d{2}:\d{2}\s*\n\s*(\d)\s*\n", text)
+        if m:
+            page_fields["coach"] = m.group(1)
+
+        # OUIGO: fecha en formato DD.MM.YYYY
+        if not page_fields.get("flight_date"):
+            m = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", text)
+            if m:
+                d, mo, y = m.group(1), m.group(2), m.group(3)
+                page_fields["flight_date"] = f"{y}-{mo}-{d}"
+
+        # OUIGO: localizador (6 caracteres alfanumericos en linea propia)
+        if not page_fields.get("pnr"):
+            m = re.search(r"\n([A-Z0-9]{6})\n", text)
+            if m and m.group(1) not in ('ALTURA','OUIGO','VENTA'):
+                page_fields["pnr"] = m.group(1)
 
         # Hora de salida (varios formatos segun aerolinea)
         # Ryanair: "Departs", "Departure", "Salida"

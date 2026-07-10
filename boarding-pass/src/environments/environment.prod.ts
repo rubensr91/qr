@@ -1,4 +1,1 @@
-export const environment = {
-  production: true,
-  apiUrl: 'https://smooth-taxes-tie.loca.lt',
-};
+export const environment = { production: true, apiUrl: "https://photographers-gis-priorities-gather.trycloudflare.com" };

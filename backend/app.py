@@ -266,9 +266,12 @@ async def extract(file: UploadFile = File(...)):
         # Mezclar campos del texto del PDF (solo si el barcode no los tiene)
         extras = text_fields.get(page, {})
         if extras:
-            for key in ("from", "to", "seat", "name", "flight_time"):
+            for key in ("from", "to", "seat", "name", "flight_time", "train", "coach"):
                 if key in extras and not parsed.get(key):
                     parsed[key] = extras[key]
+            # Para trenes: sobreescribir train si el barcode es 000000 (invalido)
+            if parsed.get("kind") == "train" and extras.get("train") and parsed.get("train", "").lstrip("0") == "":
+                parsed["train"] = extras["train"]
             # Si el código no tiene año (IATA BCBP) pero el PDF tiene fecha, usarla
             if not parsed.get("has_explicit_year") and extras.get("flight_date"):
                 parsed["flight_date"] = extras["flight_date"]
