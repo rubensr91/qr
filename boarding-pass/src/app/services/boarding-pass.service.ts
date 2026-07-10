@@ -22,6 +22,7 @@ export interface Pass {
   origin?: string;
   raw?: string;
   sourceFile?: string;
+  has_explicit_year?: boolean;
 }
 
 export interface BarcodeImage {

@@ -1,22 +1,23 @@
 <ion-header class="glass" [translucent]="true">
   <ion-toolbar>
-    <ion-title class="mono">bp</ion-title>
-    <ion-buttons slot="end">
-      <ion-button routerLink="/trips" fill="clear">
-        <ion-icon name="briefcase-outline" slot="icon-only"></ion-icon>
-      </ion-button>
-    </ion-buttons>
+    <ion-title></ion-title>
+
   </ion-toolbar>
 </ion-header>
 
 <ion-content [fullscreen]="true">
   <div class="hero page-enter">
     <h1 class="hero__title">Tu próximo<br><em>viaje</em> empieza aquí</h1>
-    <p class="hero__sub">Sube tus tarjetas de embarque o billetes y deja que la IA te prepare el itinerario perfecto.</p>
+    <p class="hero__sub">Sube tus tarjetas de embarque o billetes y organiza tu viaje al instante.</p>
 
     <ion-button expand="block" class="primary-cta page-enter-1" (click)="pickAndUpload()" [disabled]="busy">
       <ion-icon name="cloud-upload-outline" slot="start"></ion-icon>
       {{ busy ? 'Procesando ' + progress + '…' : 'Crear nuevo viaje' }}
+    </ion-button>
+
+    <ion-button expand="block" fill="clear" class="btn-saved-trips page-enter-2" routerLink="/trips">
+      <ion-icon name="briefcase-outline" slot="start"></ion-icon>
+      Ver viajes guardados
     </ion-button>
   </div>
 </ion-content>

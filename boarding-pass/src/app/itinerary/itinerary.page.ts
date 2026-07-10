@@ -175,6 +175,18 @@ export class ItineraryPage {
     return this.images.find((i) => i.page === pass.page);
   }
 
+  /** Formatea fecha: DD/MM si año inferido, DD/MM/YYYY si explícito. */
+  formatDate(pass: any): string {
+    if (!pass.flight_date) return '—';
+    const parts = pass.flight_date.split('-');
+    if (parts.length !== 3) return pass.flight_date;
+    const [y, m, d] = parts;
+    if (pass.has_explicit_year === false) {
+      return `${d}/${m}`;
+    }
+    return `${d}/${m}/${y}`;
+  }
+
   segmentIcon(type: string): string {
     return SEGMENT_ICONS[type] || 'ellipse';
   }

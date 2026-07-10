@@ -85,13 +85,13 @@ export class HomePage {
 
     const combinedName = filenames.join(' + ') || 'varios.pdf';
 
-    // Mostrar resultados YA (flujo directo como en main), guardar en segundo plano
-    this.router.navigate(['/result'], {
-      state: { filename: combinedName, passes: allPasses, images: allImages },
-    });
-    firstValueFrom(this.svc.saveTrip(combinedName, allPasses, allImages))
-      .then(() => console.log('Viaje guardado en segundo plano'))
-      .catch(e => console.error('Error guardando viaje en segundo plano:', e));
+    // Guardar viaje y navegar directo a /trips
+    try {
+      await firstValueFrom(this.svc.saveTrip(combinedName, allPasses, allImages));
+    } catch (e: any) {
+      console.error('Error guardando viaje:', e);
+    }
+    this.router.navigate(['/trips']);
   }
 
   private async toBlob(picked: any): Promise<File> {

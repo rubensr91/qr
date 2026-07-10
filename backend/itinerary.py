@@ -420,7 +420,9 @@ REGLAS OBLIGATORIAS:
 
 
 def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -> str:
-    """Genera un titulo basado en los destinos del viaje: 'Viaje a Sevilla' o 'Viaje a Madrid y Paris'."""
+    """Genera un titulo basado en los destinos del viaje: 'Viaje a Sevilla'.
+    Excluye la ciudad de origen (primer vuelo) para evitar mostrar
+    'Viaje a Sevilla y Barcelona' en viaje redondo BCN→SVQ→BCN."""
     if segments is None:
         segments = []
 
@@ -428,13 +430,15 @@ def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -
     trains = [p for p in passes if p.get("kind") == "train"]
     seg_hotels = [s for s in segments if s.get("type") == "hotel"]
 
+    # Ciudad de origen = from del primer vuelo
+    origin = _get_city_name(flights[0].get("from", "")) if flights else ""
+
     dests = []
     for p in flights:
         city = _get_city_name(p.get("to", ""))
-        if city and city not in dests:
+        if city and city != origin and city not in dests:
             dests.append(city)
     for t in trains:
-        # El barcode de Renfe no trae ciudad, usamos el nº de tren como fallback
         train = t.get("train", "")
         date = t.get("flight_date", "")
         label = f"Tren {train}" if train else "Tren"
@@ -444,7 +448,7 @@ def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -
             dests.append(label)
     for s in seg_hotels:
         city = s.get("city", "")
-        if city and city not in dests:
+        if city and city != origin and city not in dests:
             dests.append(city)
 
     if dests:
@@ -614,7 +618,7 @@ async def generate_itinerary(passes: list[dict], segments: list[dict] | None = N
         print("[itinerary] DEEPSEEK_API_KEY no configurada: devolviendo itinerario basico")
         basic = _build_basic_itinerary(passes, segments, weather, all_dates, num_days)
         return {
-            "warning": "Itinerario basico: configura DEEPSEEK_API_KEY para recomendaciones con IA",
+            "warning": "Itinerario basico: configura DEEPSEEK_API_KEY para recomendaciones personalizadas",
             "weather": weather,
             **basic,
         }

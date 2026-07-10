@@ -152,6 +152,18 @@ export class ResultPage {
     return names[code] || code;
   }
 
+  /** Formatea fecha: DD/MM si año inferido, DD/MM/YYYY si explícito. */
+  formatDate(pass: any): string {
+    if (!pass.flight_date) return '—';
+    const parts = pass.flight_date.split('-');
+    if (parts.length !== 3) return pass.flight_date;
+    const [y, m, d] = parts;
+    if (pass.has_explicit_year === false) {
+      return `${d}/${m}`;
+    }
+    return `${d}/${m}/${y}`;
+  }
+
   goHome() {
     this.router.navigate(['/home']);
   }

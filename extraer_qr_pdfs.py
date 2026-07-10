@@ -292,6 +292,32 @@ def _extract_text_fields_from_doc(doc):
         if m:
             page_fields["coach"] = m.group(1).strip()
 
+        # Fecha con año (formato DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD,
+        # o DD MES YYYY como "06 DIC 2026" / "06 December 2026")
+        date_match = re.search(
+            r"(\d{2})[\s/-](\d{2}|[A-Za-z]{3,})[\s/-](\d{4})",
+            text,
+        )
+        if date_match:
+            d, m, y = date_match.group(1), date_match.group(2), date_match.group(3)
+            # Si el mes es texto, convertir a número
+            month_map = {
+                "ene": "01", "feb": "02", "mar": "03", "abr": "04", "may": "05",
+                "jun": "06", "jul": "07", "ago": "08", "sep": "09", "oct": "10",
+                "nov": "11", "dic": "12",
+                "jan": "01", "feb": "02", "mar": "03", "apr": "04", "may": "05",
+                "jun": "06", "jul": "07", "aug": "08", "sep": "09", "oct": "10",
+                "nov": "11", "dec": "12",
+            }
+            if m.lower()[:3] in month_map:
+                m = month_map[m.lower()[:3]]
+            try:
+                from datetime import date as dt_date
+                dt_date(int(y), int(m), int(d))
+                page_fields["flight_date"] = f"{y}-{int(m):02d}-{int(d):02d}"
+            except (ValueError, TypeError):
+                pass
+
         # Nombre del pasajero (varios formatos segun operador)
         # 1) Etiqueta explicita "Pasajero:", "Titular:", "Nombre:"
         m = re.search(

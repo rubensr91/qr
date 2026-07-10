@@ -78,6 +78,8 @@ def _parse_iata_bcbp(text, year=None):
         "seat": seat,
         "check_in_seq": chkseq,
         "raw": text,
+        "has_explicit_year": False,
+        "doy": doy_str,
     }
 
 
@@ -200,7 +202,46 @@ def _parse_renfe(text):
         "class": train_match["clas"],
         "seat": None,
         "raw": text,
+        "has_explicit_year": True,
     }
+
+
+# --- Year inference ---------------------------------------------------------
+# Para billetes sin año explicito (IATA BCBP: solo dia del año),
+# inferimos el año minimizando el lapso entre vuelos consecutivos.
+# Ej: 31-Dic (DOY=365) + 3-Ene (DOY=3) → 2026 y 2027 (gap de 3 días).
+
+def infer_years(passes: list[dict]) -> None:
+    """Infiere años para vuelos sin año explícito minimizando el lapso.
+
+    Agrupa por (pnr, kind), mantiene orden original de páginas,
+    detecta cruce de año cuando DOY decrece (ej: DOY=365 → DOY=3).
+    Modifica los pases in-place.
+    """
+    groups: dict[tuple, list[dict]] = {}
+    for p in passes:
+        if p.get("has_explicit_year", True):
+            continue
+        key = (p.get("pnr"), p.get("kind"))
+        groups.setdefault(key, []).append(p)
+
+    for key, group in groups.items():
+        if len(group) <= 1:
+            continue
+
+        base_year = date.today().year
+        prev_doy = int(group[0].get("doy", 0))
+
+        for p in group:
+            doy = int(p.get("doy", 0))
+            if prev_doy > 180 and doy < prev_doy and doy < 180:
+                base_year += 1
+            try:
+                corrected = date(base_year, 1, 1) + timedelta(days=doy - 1)
+                p["flight_date"] = corrected.isoformat()
+            except (ValueError, TypeError):
+                pass
+            prev_doy = doy
 
 
 # --- Dispatcher -------------------------------------------------------------

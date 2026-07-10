@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT))
 
 from .qr_client import extract_codes, extract_codes_from_image  # noqa: E402
 from .itinerary import generate_itinerary, generate_trip_name  # noqa: E402
-from .parser import parse_code  # noqa: E402
+from .parser import infer_years, parse_code  # noqa: E402
 
 DB_PATH = Path(__file__).resolve().parent / "trips.db"
 
@@ -268,6 +268,10 @@ async def extract(file: UploadFile = File(...)):
             for key in ("from", "to", "seat", "name"):
                 if key in extras and not parsed.get(key):
                     parsed[key] = extras[key]
+            # Si el código no tiene año (IATA BCBP) pero el PDF tiene fecha, usarla
+            if not parsed.get("has_explicit_year") and extras.get("flight_date"):
+                parsed["flight_date"] = extras["flight_date"]
+                parsed["has_explicit_year"] = True
         # Validacion completa: descartar si faltan datos esenciales
         ok, motivo = _is_pass_complete(parsed)
         if not ok:
@@ -287,6 +291,9 @@ async def extract(file: UploadFile = File(...)):
         })
     if descartados:
         print(f"[extract] {descartados} pases descartados por datos incompletos")
+
+    # Inferir años para vuelos sin año explícito (Ryanair, etc.)
+    infer_years(passes)
 
     return {
         "filename": file.filename,

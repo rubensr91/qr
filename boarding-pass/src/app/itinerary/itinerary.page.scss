@@ -746,3 +746,31 @@
   gap: var(--space-3);
   padding: 0 var(--space-4) var(--space-4);
 }
+
+// --- Botón crear itinerario ---
+.btn-itinerary {
+  --background: linear-gradient(135deg, var(--teal), var(--teal-dark, #0a7a7e));
+  --color: white;
+  --border-radius: 14px;
+  --padding-top: 16px;
+  --padding-bottom: 16px;
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+  box-shadow: 0 4px 16px rgba(13, 115, 119, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:active {
+    transform: scale(0.97);
+    box-shadow: 0 2px 8px rgba(13, 115, 119, 0.2);
+  }
+
+  &[disabled] {
+    opacity: 0.6;
+    --background: var(--navy-muted);
+    box-shadow: none;
+  }
+}

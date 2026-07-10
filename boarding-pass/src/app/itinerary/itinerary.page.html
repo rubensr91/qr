@@ -20,9 +20,8 @@
   <div *ngIf="!loading && !itinerary && !error" class="state-container">
     <ion-icon name="sparkles-outline" size="large" color="primary"></ion-icon>
     <h2>Sin itinerario</h2>
-    <p>Genera un plan de viaje personalizado con IA</p>
-    <ion-button expand="block" (click)="generateItinerary()" [disabled]="generating">
-      <ion-icon name="sparkles" slot="start"></ion-icon>
+    <p>Genera un plan de viaje personalizado</p>
+    <ion-button class="btn-itinerary" (click)="generateItinerary()" [disabled]="generating">
       {{ generating ? 'Creando…' : 'Crear itinerario' }}
     </ion-button>
   </div>
@@ -151,7 +150,7 @@
                 </div>
                 <div class="bp-info__cell">
                   <span class="bp-info__label">FECHA</span>
-                  <span class="bp-info__value mono">{{ pass.flight_date || '—' }}</span>
+                  <span class="bp-info__value mono">{{ formatDate(pass) }}</span>
                 </div>
                 <div class="bp-info__cell" *ngIf="pass.seat">
                   <span class="bp-info__label">ASIENTO</span>
