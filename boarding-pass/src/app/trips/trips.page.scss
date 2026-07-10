@@ -28,8 +28,18 @@
   align-items: center;
   gap: var(--space-3);
   margin-bottom: var(--space-2);
+  min-width: 0;
+
+  .board-code {
+    font-size: var(--fs-body);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 45%;
+    flex-shrink: 1;
+  }
 }
-.trip-card__title-block .flight-strip__line { flex: 1; }
+.trip-card__title-block .flight-strip__line { flex: 1; min-width: 20px; }
 
 .trip-card__name {
   margin: 0;
