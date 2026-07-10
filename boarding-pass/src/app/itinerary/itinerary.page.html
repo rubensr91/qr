@@ -152,6 +152,14 @@
                   <span class="bp-info__label">FECHA</span>
                   <span class="bp-info__value mono">{{ formatDate(pass) }}</span>
                 </div>
+                <div class="bp-info__cell" *ngIf="pass.flight_time">
+                  <span class="bp-info__label">HORA</span>
+                  <span class="bp-info__value mono">{{ pass.flight_time }}</span>
+                </div>
+                <div class="bp-info__cell" *ngIf="pass.gate_close_time">
+                  <span class="bp-info__label">CIERRE PUERTAS</span>
+                  <span class="bp-info__value mono">{{ pass.gate_close_time }}</span>
+                </div>
                 <div class="bp-info__cell" *ngIf="pass.seat">
                   <span class="bp-info__label">ASIENTO</span>
                   <span class="bp-info__value mono">{{ pass.seat }}</span>
