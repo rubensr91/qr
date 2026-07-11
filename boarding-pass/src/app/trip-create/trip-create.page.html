@@ -156,3 +156,11 @@
     </div>
   </div>
 </ion-content>
+
+<!-- Processing overlay -->
+<div class="proc-overlay" *ngIf="busy">
+  <div class="proc-card">
+    <ion-spinner name="dots" color="primary"></ion-spinner>
+    <p class="proc-card__title">Procesando archivos</p>
+  </div>
+</div>

@@ -1,7 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
-import { LoadingController, ToastController } from '@ionic/angular';
+import { ToastController } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import { BoardingPassService, Pass, TravelSegment } from '../services/boarding-pass.service';
 
@@ -42,7 +42,6 @@ export class TripCreatePage {
   constructor(
     private svc: BoardingPassService,
     private router: Router,
-    private loadingCtrl: LoadingController,
     private toastCtrl: ToastController,
   ) {}
 
@@ -80,8 +79,6 @@ export class TripCreatePage {
     }
     if (!picked.length) return;
 
-    const loading = await this.loadingCtrl.create({ message: 'Procesando PDFs…' });
-    await loading.present();
     this.busy = true;
 
     for (const file of picked) {
@@ -98,7 +95,6 @@ export class TripCreatePage {
       }
     }
 
-    await loading.dismiss();
     this.busy = false;
   }
 
