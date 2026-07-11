@@ -1017,8 +1017,18 @@ def _build_basic_itinerary(
     }
 
 
-async def generate_itinerary(passes: list[dict], segments: list[dict] | None = None) -> dict:
-    """Genera un itinerario completo usando DeepSeek LLM y Open-Meteo."""
+async def generate_itinerary(
+    passes: list[dict],
+    segments: list[dict] | None = None,
+    session_id: str | None = None,
+) -> dict:
+    """Genera un itinerario completo usando DeepSeek LLM y Open-Meteo.
+
+    Args:
+        passes: Lista de pases extraidos de billetes.
+        segments: Segmentos manuales (hoteles, vuelos, etc.).
+        session_id: ID de sesion para tracking de tokens (opcional).
+    """
     from datetime import timedelta
 
     if segments is None:
@@ -1167,6 +1177,20 @@ async def generate_itinerary(passes: list[dict], segments: list[dict] | None = N
         )
         content = response.choices[0].message.content or ""
         print(f"[deepseek] response length: {len(content)} chars")
+
+        # Registrar consumo real de tokens de la API
+        if session_id and response.usage:
+            from .token_tracker import record_usage
+            token_stats = record_usage(
+                session_id,
+                response.usage.prompt_tokens,
+                response.usage.completion_tokens,
+            )
+            print(f"[deepseek] tokens: {response.usage.prompt_tokens} in + "
+                  f"{response.usage.completion_tokens} out = "
+                  f"{response.usage.total_tokens} total "
+                  f"(sesion: {token_stats['total_tokens_used']}/"
+                  f"{token_stats['max_tokens']})")
     except Exception as e:
         print(f"[deepseek] Error: {e}")
         return {
@@ -1190,5 +1214,9 @@ async def generate_itinerary(passes: list[dict], segments: list[dict] | None = N
         "pass_count": len(passes),
         "generated_at": datetime.now().isoformat(),
     }
+
+    # Incluir estadisticas de tokens (app.py las extrae con pop)
+    if session_id and response.usage:
+        itinerary["_token_usage"] = token_stats
 
     return itinerary

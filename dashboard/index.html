@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR Extractor — Admin Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e1e4ed;
+    --muted: #6b7280;
+    --green: #22c55e;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
+    --bar-bg: #2a2d3a;
+    --bar-fill: linear-gradient(90deg, #3b82f6, #8b5cf6);
+    --bar-warn: linear-gradient(90deg, #f59e0b, #ef4444);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }
+  .header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.offline { background: var(--red); }
+  .status-dot.loading { background: var(--amber); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .url-config {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .url-config input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    width: 280px;
+    font-family: monospace;
+  }
+  .url-config input:focus {
+    outline: none;
+    border-color: var(--blue);
+  }
+  .refresh-btn {
+    background: var(--blue);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .refresh-btn:hover { opacity: 0.9; }
+  .main {
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .stats-bar {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    flex: 1;
+    min-width: 180px;
+  }
+  .stat-card .label {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .stat-card .value {
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .table-wrap {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .table-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .auto-refresh {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th {
+    text-align: left;
+    padding: 10px 16px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  td {
+    padding: 12px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .session-id {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    color: var(--blue);
+    word-break: break-all;
+    max-width: 200px;
+  }
+  .session-id.short {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .trips-cell {
+    font-size: 12px;
+  }
+  .trip-name-tag {
+    display: inline-block;
+    background: var(--border);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    margin: 1px 2px;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bar-cell { min-width: 140px; }
+  .bar-outer {
+    background: var(--bar-bg);
+    border-radius: 4px;
+    height: 6px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+  .bar-inner {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+  }
+  .bar-inner.ok { background: var(--bar-fill); }
+  .bar-inner.warn { background: var(--bar-warn); }
+  .token-text {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge.ok { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge.blocked { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge.warn { background: rgba(245,158,11,0.15); color: var(--amber); }
+  .badge.custom { background: rgba(139,92,246,0.15); color: var(--purple); }
+  .actions-cell {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    background: transparent;
+    color: var(--text);
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--text); }
+  .btn.grant { color: var(--blue); border-color: rgba(59,130,246,0.4); }
+  .btn.grant:hover { background: rgba(59,130,246,0.1); border-color: var(--blue); }
+  .btn.block { color: var(--red); border-color: rgba(239,68,68,0.4); }
+  .btn.block:hover { background: rgba(239,68,68,0.1); border-color: var(--red); }
+  .btn.unblock { color: var(--green); border-color: rgba(34,197,94,0.4); }
+  .btn.unblock:hover { background: rgba(34,197,94,0.1); border-color: var(--green); }
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .empty .icon { font-size: 40px; margin-bottom: 12px; }
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    z-index: 100;
+    animation: slideIn 0.3s ease;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .toast.success { border-color: var(--green); }
+  .toast.error { border-color: var(--red); }
+  @keyframes slideIn {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+  }
+  .modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    width: 360px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  }
+  .modal h3 { margin-bottom: 16px; font-size: 16px; }
+  .modal label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .modal input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  .modal input:focus { outline: none; border-color: var(--blue); }
+  .modal .actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .modal .btn-primary {
+    background: var(--blue);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .modal .btn-primary:hover { opacity: 0.9; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>⚡ QR Extractor Admin</h1>
+    <span class="status-dot loading" id="statusDot"></span>
+    <span style="font-size:12px;color:var(--muted)" id="statusText">Conectando...</span>
+  </div>
+  <div class="url-config">
+    <input type="text" id="apiUrl" placeholder="http://localhost:8765" spellcheck="false">
+    <button class="refresh-btn" onclick="refresh()">↻ Actualizar</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="label">Sesiones activas</div>
+      <div class="value" id="statSessions">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Tokens totales gastados</div>
+      <div class="value" id="statTokens">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Sesiones bloqueadas</div>
+      <div class="value" style="color:var(--red)" id="statBlocked">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Límite por defecto</div>
+      <div class="value" style="font-size:18px" id="statDefaultLimit">—</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header">
+      <span>Sesiones</span>
+      <span class="auto-refresh" id="refreshLabel">Auto-refresh: 10s</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Sesión</th>
+          <th>Viajes</th>
+          <th>Tokens usados</th>
+          <th>Límite</th>
+          <th>Restante</th>
+          <th>Uso</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="sessionsBody">
+        <tr><td colspan="8" class="empty"><div class="icon">⏳</div>Cargando sesiones...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+<div id="modalContainer"></div>
+
+<script>
+const DEFAULT_API = 'http://localhost:8765';
+const REFRESH_SEC = 10;
+let countdown = REFRESH_SEC;
+let apiBase = localStorage.getItem('dashboard_api_url') || DEFAULT_API;
+
+document.getElementById('apiUrl').value = apiBase;
+
+document.getElementById('apiUrl').addEventListener('change', function() {
+  apiBase = this.value.trim().replace(/\/+$/, '') || DEFAULT_API;
+  localStorage.setItem('dashboard_api_url', apiBase);
+  refresh();
+});
+
+function fmt(n) {
+  if (n == null) return '—';
+  return n.toLocaleString('es-ES');
+}
+
+function toast(msg, type) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type || 'success');
+  el.textContent = msg;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function setStatus(online) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'status-dot';
+  if (online === null) {
+    dot.classList.add('loading');
+    txt.textContent = 'Conectando...';
+  } else if (online) {
+    dot.classList.add('online');
+    txt.textContent = 'Conectado';
+  } else {
+    dot.classList.add('offline');
+    txt.textContent = 'Sin conexión';
+  }
+}
+
+async function apiCall(method, path, body) {
+  const res = await fetch(apiBase + path, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail));
+  }
+  return res.json();
+}
+
+async function refresh() {
+  setStatus(null);
+  try {
+    const data = await apiCall('GET', '/api/admin/sessions');
+    setStatus(true);
+    render(data.sessions);
+  } catch (e) {
+    setStatus(false);
+    console.error('Refresh error:', e);
+  }
+}
+
+function render(sessions) {
+  const tbody = document.getElementById('sessionsBody');
+
+  if (!sessions.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty"><div class="icon">📭</div>No hay sesiones registradas aún</td></tr>';
+    updateStats(sessions);
+    return;
+  }
+
+  tbody.innerHTML = sessions.map(s => {
+    const pct = s.max_tokens > 0 ? Math.min(100, (s.total_tokens_used / s.max_tokens) * 100) : 0;
+    const barClass = pct > 80 ? 'warn' : 'ok';
+    const sid = s.session_id;
+    const isShort = sid.length > 26;
+
+    let statusBadge = '';
+    if (s.blocked) {
+      statusBadge = '<span class="badge blocked">🔒 Bloqueada</span>';
+    } else if (pct >= 100) {
+      statusBadge = '<span class="badge warn">⚠️ Sin tokens</span>';
+    } else if (pct > 80) {
+      statusBadge = '<span class="badge warn">⚠️ Próxima al límite</span>';
+    } else {
+      statusBadge = '<span class="badge ok">✅ Activa</span>';
+    }
+    if (s.has_custom_limit) {
+      statusBadge += ' <span class="badge custom">⚙️ Custom</span>';
+    }
+
+    const tripsHtml = s.trip_count > 0
+      ? `<span style="color:var(--text)">${s.trip_count} viaje${s.trip_count !== 1 ? 's' : ''}</span>` +
+        (s.trip_names.length ? '<br>' + s.trip_names.slice(0, 3).map(n =>
+          `<span class="trip-name-tag">${escapeHtml(n)}</span>`
+        ).join('') + (s.trip_names.length > 3 ? `<span class="trip-name-tag">+${s.trip_names.length - 3}</span>` : '') : '')
+      : '<span style="color:var(--muted)">—</span>';
+
+    const actionsHtml = s.blocked
+      ? `<button class="btn unblock" onclick="toggleBlock('${sid}', false)">🔓 Desbloquear</button>`
+      : `<button class="btn grant" onclick="showGrant('${sid}')">💰 +Tokens</button>
+         <button class="btn block" onclick="toggleBlock('${sid}', true)">🔒 Bloquear</button>`;
+
+    return `<tr>
+      <td><div class="session-id${isShort ? ' short' : ''}" title="${sid}">${isShort ? sid.slice(0,20)+'…' : sid}</div></td>
+      <td class="trips-cell">${tripsHtml}</td>
+      <td style="font-variant-numeric:tabular-nums">${fmt(s.total_tokens_used)}</td>
+      <td style="font-variant-numeric:tabular-nums">${fmt(s.max_tokens)}</td>
+      <td style="font-variant-numeric:tabular-nums;color:${s.remaining === 0 ? 'var(--red)' : 'var(--green)'}">${fmt(s.remaining)}</td>
+      <td class="bar-cell">
+        <span style="font-size:11px">${pct.toFixed(0)}%</span>
+        <div class="bar-outer"><div class="bar-inner ${barClass}" style="width:${pct}%"></div></div>
+        <div class="token-text">${s.request_count} peticion${s.request_count !== 1 ? 'es' : ''}</div>
+      </td>
+      <td>${statusBadge}</td>
+      <td><div class="actions-cell">${actionsHtml}</div></td>
+    </tr>`;
+  }).join('');
+
+  updateStats(sessions);
+}
+
+function updateStats(sessions) {
+  document.getElementById('statSessions').textContent = sessions.length;
+  const totalTokens = sessions.reduce((sum, s) => sum + s.total_tokens_used, 0);
+  document.getElementById('statTokens').textContent = fmt(totalTokens);
+  const blocked = sessions.filter(s => s.blocked).length;
+  document.getElementById('statBlocked').textContent = blocked;
+  // Default limit from first session without custom limit, or env var
+  const defaultSes = sessions.find(s => !s.has_custom_limit);
+  document.getElementById('statDefaultLimit').textContent = defaultSes ? fmt(defaultSes.max_tokens) : '200k';
+}
+
+async function toggleBlock(sid, block) {
+  try {
+    const data = await apiCall('POST', '/api/admin/block', { session_id: sid, blocked: block });
+    toast(data.message, 'success');
+    refresh();
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+function showGrant(sid) {
+  const html = `
+    <div class="modal-overlay" id="grantModal" onclick="if(event.target===this)closeGrant()">
+      <div class="modal">
+        <h3>💰 Conceder tokens extra</h3>
+        <label>Sesión</label>
+        <input type="text" value="${sid}" readonly style="font-family:monospace;font-size:12px;color:var(--muted)">
+        <label>Cantidad de tokens a añadir</label>
+        <input type="number" id="grantAmount" placeholder="Ej: 100000" min="1000" step="10000" value="100000" autofocus>
+        <div class="actions">
+          <button class="btn" onclick="closeGrant()">Cancelar</button>
+          <button class="btn-primary" onclick="doGrant('${sid}')">Conceder</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalContainer').innerHTML = html;
+  setTimeout(() => document.getElementById('grantAmount')?.focus(), 50);
+}
+
+function closeGrant() {
+  document.getElementById('modalContainer').innerHTML = '';
+}
+
+async function doGrant(sid) {
+  const amount = parseInt(document.getElementById('grantAmount').value);
+  if (!amount || amount < 1) {
+    toast('Cantidad inválida', 'error');
+    return;
+  }
+  try {
+    const data = await apiCall('POST', '/api/admin/grant', { session_id: sid, amount });
+    closeGrant();
+    toast(data.message, 'success');
+    refresh();
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Auto-refresh countdown
+setInterval(() => {
+  countdown--;
+  if (countdown <= 0) {
+    refresh();
+    countdown = REFRESH_SEC;
+  }
+  document.getElementById('refreshLabel').textContent = `Auto-refresh: ${countdown}s`;
+}, 1000);
+
+// Initial load
+refresh();
+</script>
+
+</body>
+</html>

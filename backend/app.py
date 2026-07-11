@@ -28,6 +28,9 @@ sys.path.insert(0, str(ROOT))
 from .qr_client import extract_codes, extract_codes_from_image  # noqa: E402
 from .itinerary import generate_itinerary, generate_trip_name  # noqa: E402
 from .parser import infer_years, parse_code  # noqa: E402
+from .token_tracker import check_limit, get_usage  # noqa: E402
+from .token_tracker import _ensure_table as _ensure_token_table  # noqa: E402
+from .admin import router as admin_router  # noqa: E402
 
 DB_PATH = Path(__file__).resolve().parent / "trips.db"
 
@@ -96,6 +99,8 @@ def _init_db():
         conn.execute("ALTER TABLE trips ADD COLUMN segments TEXT NOT NULL DEFAULT '[]'")
     conn.commit()
     conn.close()
+    # Asegurar que la tabla de tracking de tokens tambien existe
+    _ensure_token_table()
 
 
 # Inicializar DB al arrancar
@@ -111,6 +116,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Router de admin (dashboard de monitoreo de tokens)
+app.include_router(admin_router)
 
 
 # --- Session helper ---
@@ -579,9 +587,28 @@ async def generate_trip_itinerary(trip_id: int, request: Request, x_session_id: 
     if not passes and not segments:
         raise HTTPException(status_code=400, detail="El viaje no tiene pases ni segmentos")
 
+    # Verificar limite de tokens antes de llamar a DeepSeek
+    allowed, usage_stats = check_limit(sid)
+    if not allowed:
+        if usage_stats.get("blocked"):
+            error_msg = "Sesion bloqueada por el administrador"
+        else:
+            error_msg = "Limite de tokens excedido para esta sesion"
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": error_msg,
+                "blocked": usage_stats.get("blocked", False),
+                "total_tokens_used": usage_stats["total_tokens_used"],
+                "max_tokens": usage_stats["max_tokens"],
+                "remaining": usage_stats["remaining"],
+                "request_count": usage_stats["request_count"],
+            },
+        )
+
     # Generar nuevo itinerario
     try:
-        itinerary = await generate_itinerary(passes, segments)
+        itinerary = await generate_itinerary(passes, segments, session_id=sid)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando itinerario: {e}")
 
@@ -595,11 +622,27 @@ async def generate_trip_itinerary(trip_id: int, request: Request, x_session_id: 
         conn.commit()
         conn.close()
 
-    return {
+    # Incluir estadisticas de tokens en la respuesta
+    token_info = itinerary.pop("_token_usage", None)
+    response = {
         "trip_id": trip_id,
         "cached": False,
         "itinerary": itinerary,
     }
+    if token_info:
+        response["token_usage"] = token_info
+
+    return response
+
+
+# --- Token Usage ---
+
+
+@app.get("/api/token-usage")
+def token_usage(request: Request, x_session_id: str = Header(default="")):
+    """Devuelve las estadisticas de consumo de tokens de la sesion actual."""
+    sid = _get_session_id_via_header(request, x_session_id)
+    return get_usage(sid)
 
 
 def _get_session_id_via_header(request: Request, header_value: str) -> str:
