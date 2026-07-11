@@ -824,7 +824,19 @@ def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -
     trains = [p for p in passes if p.get("kind") == "train"]
     seg_hotels = [s for s in segments if s.get("type") == "hotel"]
 
-    origin = _get_city_name(flights[0].get("from", "")) if flights else ""
+    origin = ""
+    if flights:
+        origin = _get_city_name(flights[0].get("from", ""))
+    elif trains:
+        # Ordenar trenes por fecha para detectar correctamente el origen
+        sorted_trains = sorted(
+            [t for t in trains if t.get("flight_date")],
+            key=lambda t: t["flight_date"]
+        )
+        if sorted_trains:
+            origin = _get_city_name(sorted_trains[0].get("from", ""))
+        else:
+            origin = _get_city_name(trains[0].get("from", ""))
 
     dests = _real_flight_destinations(flights, seg_hotels, origin)
     for t in trains:

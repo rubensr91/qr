@@ -394,6 +394,13 @@ def _extract_text_fields_from_doc(doc):
             if m and m.group(1) not in ('ALTURA','OUIGO','VENTA'):
                 page_fields["pnr"] = m.group(1)
 
+        # Operador: Renfe / Iryo / OUIGO (buscar en orden de especificidad)
+        op_match = re.search(r"\b(?:IRYO|iryo|Iryo|OUIGO|Ouigo|ouigo)\b", text)
+        if op_match:
+            page_fields["operator"] = op_match.group(0).upper()
+        elif re.search(r"\bRenfe\b", text, re.IGNORECASE):
+            page_fields["operator"] = "RENFE"
+
         # Hora de salida (varios formatos segun aerolinea)
         # Ryanair: "Departs", "Departure", "Salida"
         # Vueling: "Salida", "Hora", "Departure"
