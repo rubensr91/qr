@@ -1,1 +1,1 @@
-export const environment = { production: true, apiUrl: "https://photographers-gis-priorities-gather.trycloudflare.com" };
+export const environment = { production: true, apiUrl: "https://separately-cpu-tiles-move.trycloudflare.com" };

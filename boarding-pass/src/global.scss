@@ -305,3 +305,60 @@ ion-button.primary-cta:active {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+// ---- Processing overlay (used by home, trips, trip-create, itinerary) ----
+.proc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 41, 66, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  animation: overlayIn 250ms var(--ease) both;
+}
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.proc-card {
+  background: var(--paper);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+  max-width: 340px;
+  width: 100%;
+  animation: cardPop 400ms var(--ease-bounce) both;
+  animation-delay: 80ms;
+}
+@keyframes cardPop {
+  from { opacity: 0; transform: scale(0.9) translateY(16px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.proc-card__title {
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  color: var(--navy);
+  margin: var(--space-4) 0 var(--space-1);
+  letter-spacing: -0.01em;
+}
+.proc-card__count {
+  font-family: var(--font-mono);
+  font-size: var(--fs-tiny);
+  color: var(--navy-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0 0 var(--space-3);
+  font-variant-numeric: tabular-nums;
+}
+.proc-card__bar {
+  --background: var(--paper-soft);
+  --progress-background: linear-gradient(90deg, var(--teal), var(--teal-light));
+  height: 4px;
+  border-radius: 2px;
+  margin-top: var(--space-2);
+}
