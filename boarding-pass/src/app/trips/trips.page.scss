@@ -41,6 +41,20 @@
 }
 .trip-card__title-block .flight-strip__line { flex: 1; min-width: 20px; }
 
+.trip-card__title-block .flight-strip__line::after {
+  display: none;
+}
+
+.trip-card__strip-icon {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1rem;
+  color: var(--coral);
+  background: var(--paper);
+  padding: 0 4px;
+}
+
 .trip-card__name {
   margin: 0;
   font-size: var(--fs-h3);

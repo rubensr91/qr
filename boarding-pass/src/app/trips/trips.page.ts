@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
-import { AlertController, LoadingController, ToastController } from '@ionic/angular';
+import { AlertController, ToastController } from '@ionic/angular';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { firstValueFrom } from 'rxjs';
 import { BoardingPassService, Pass, Trip } from '../services/boarding-pass.service';
@@ -22,7 +22,6 @@ export class TripsPage {
     private svc: BoardingPassService,
     private router: Router,
     private alertCtrl: AlertController,
-    private loadingCtrl: LoadingController,
     private toastCtrl: ToastController,
   ) {}
 
@@ -119,8 +118,6 @@ export class TripsPage {
 
     if (!picked || picked.length === 0) return;
 
-    const loading = await this.loadingCtrl.create({ message: 'Procesando PDFs…' });
-    await loading.present();
     this.busy = true;
 
     const allPasses: Pass[] = [];
@@ -133,7 +130,6 @@ export class TripsPage {
       const file = picked[i];
       const filename = file.name || `pdf_${i + 1}.pdf`;
       this.progress = `${i + 1}/${picked.length}`;
-      loading.message = `Procesando ${i + 1}/${picked.length}: ${filename}`;
 
       try {
         const blob = await this.toBlob(file);
@@ -154,7 +150,6 @@ export class TripsPage {
       }
     }
 
-    await loading.dismiss();
     this.busy = false;
     this.progress = '';
 
@@ -218,6 +213,12 @@ export class TripsPage {
     this.router.navigate(['/trip-create'], {
       state: { editTripId: trip.id, tripName: trip.trip_name, segments: trip.segments },
     });
+  }
+
+  /** Determina el icono de modo de transporte para la tarjeta del viaje. */
+  tripModeIcon(trip: Trip): string {
+    const hasTrain = trip.pass_data.passes.some(p => p.kind === 'train');
+    return hasTrain ? 'train-outline' : 'airplane-outline';
   }
 
   /** Extrae el código de origen del primer vuelo o tren. */

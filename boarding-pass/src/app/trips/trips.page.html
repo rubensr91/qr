@@ -28,7 +28,7 @@
     <p>Sube archivos pdf o imágenes de tus tarjetas de embarque para crear viajes.</p>
     <ion-button class="primary-cta" (click)="pickAndUpload()" [disabled]="busy">
       <ion-icon name="cloud-upload-outline" slot="start"></ion-icon>
-      {{ busy ? 'Procesando ' + progress + '…' : 'Subir archivos' }}
+      {{ busy ? 'Procesando…' : 'Subir archivos' }}
     </ion-button>
   </div>
 
@@ -42,7 +42,9 @@
       <div class="trip-card__head">
         <div class="trip-card__title-block">
           <span class="board-code board-code--md">{{ getOriginCode(trip) }}</span>
-          <div class="flight-strip__line"></div>
+          <div class="flight-strip__line">
+            <ion-icon [name]="tripModeIcon(trip)" class="trip-card__strip-icon"></ion-icon>
+          </div>
           <span class="board-code board-code--md">{{ getDestCode(trip) }}</span>
         </div>
         <h3 class="trip-card__name">{{ trip.trip_name || trip.filename }}</h3>
@@ -66,7 +68,6 @@
       <!-- Actions -->
       <div class="trip-card__actions">
         <ion-button fill="clear" size="small" (click)="goToItinerary(trip); $event.stopPropagation()">
-          <ion-icon name="sparkles-outline" slot="start"></ion-icon>
           <span>Itinerario</span>
         </ion-button>
         <ion-button fill="clear" size="small" color="medium" (click)="editTrip(trip); $event.stopPropagation()">
@@ -79,3 +80,13 @@
     </div>
   </div>
 </ion-content>
+
+<!-- Processing overlay -->
+<div class="proc-overlay" *ngIf="busy">
+  <div class="proc-card">
+    <ion-spinner name="dots" color="primary"></ion-spinner>
+    <p class="proc-card__title">Procesando tarjetas de embarque</p>
+    <p class="proc-card__count" *ngIf="progress">{{ progress }}</p>
+    <ion-progress-bar *ngIf="progress" [value]="0.5" color="primary" class="proc-card__bar"></ion-progress-bar>
+  </div>
+</div>
