@@ -12,7 +12,7 @@
 
     <ion-button expand="block" class="primary-cta page-enter-1" (click)="pickAndUpload()" [disabled]="busy">
       <ion-icon name="cloud-upload-outline" slot="start"></ion-icon>
-      {{ busy ? 'Procesando ' + progress + '…' : 'Crear nuevo viaje' }}
+      {{ busy ? 'Procesando…' : 'Crear nuevo viaje' }}
     </ion-button>
 
     <ion-button expand="block" fill="clear" class="btn-saved-trips page-enter-2" routerLink="/trips">
@@ -21,3 +21,13 @@
     </ion-button>
   </div>
 </ion-content>
+
+<!-- Processing overlay -->
+<div class="proc-overlay" *ngIf="busy">
+  <div class="proc-card">
+    <ion-spinner name="dots" color="primary"></ion-spinner>
+    <p class="proc-card__title">Procesando tarjetas de embarque</p>
+    <p class="proc-card__count" *ngIf="progress">{{ progress }}</p>
+    <ion-progress-bar *ngIf="progress" [value]="0.5" color="primary" class="proc-card__bar"></ion-progress-bar>
+  </div>
+</div>

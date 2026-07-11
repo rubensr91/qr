@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
-import { LoadingController, ToastController } from '@ionic/angular';
+import { ToastController } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import { BoardingPassService, Pass } from '../services/boarding-pass.service';
 
@@ -18,7 +18,6 @@ export class HomePage {
   constructor(
     private svc: BoardingPassService,
     private router: Router,
-    private loadingCtrl: LoadingController,
     private toastCtrl: ToastController,
   ) {}
 
@@ -39,8 +38,6 @@ export class HomePage {
 
     if (!picked || picked.length === 0) return;
 
-    const loading = await this.loadingCtrl.create({ message: 'Procesando PDFs…' });
-    await loading.present();
     this.busy = true;
 
     const allPasses: Pass[] = [];
@@ -53,7 +50,6 @@ export class HomePage {
       const file = picked[i];
       const filename = file.name || `pdf_${i + 1}.pdf`;
       this.progress = `${i + 1}/${picked.length}`;
-      loading.message = `Procesando ${i + 1}/${picked.length}: ${filename}`;
 
       try {
         const blob = await this.toBlob(file);
@@ -74,7 +70,6 @@ export class HomePage {
       }
     }
 
-    await loading.dismiss();
     this.busy = false;
     this.progress = '';
 
