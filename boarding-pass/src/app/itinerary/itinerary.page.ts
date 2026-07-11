@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
-import { LoadingController, ToastController } from '@ionic/angular';
+import { ToastController } from '@ionic/angular';
 import { ScreenBrightness } from '@capacitor-community/screen-brightness';
 import { BarcodeImage, BoardingPassService, Pass, TravelSegment } from '../services/boarding-pass.service';
 import {
@@ -70,7 +70,6 @@ export class ItineraryPage {
     private router: Router,
     private itinerarySvc: ItineraryService,
     private bpSvc: BoardingPassService,
-    private loadingCtrl: LoadingController,
     private toastCtrl: ToastController,
   ) {}
 
@@ -152,18 +151,15 @@ export class ItineraryPage {
 
   async generateItinerary() {
     this.generating = true;
-    const loading = await this.loadingCtrl.create({ message: 'Creando itinerario…' });
-    await loading.present();
     const sid = this.bpSvc.getSessionId();
 
     this.itinerarySvc.generate(this.tripId, sid).subscribe({
-      next: async (resp) => {
-        await loading.dismiss();
+      next: (resp) => {
         this.itinerary = resp.itinerary;
         this.generating = false;
+        this.activeTab = 'plan';
       },
-      error: async (err: any) => {
-        await loading.dismiss();
+      error: (err: any) => {
         this.generating = false;
         this.error = err?.error?.detail ?? err?.message ?? 'Error';
         this.toast('Error: ' + this.error, 'danger');
@@ -244,6 +240,42 @@ export class ItineraryPage {
     return pass.format || 'Pase';
   }
 
+  /**
+   * Compara fechas de vuelo manejando cruces de año entre PNRs distintos.
+   * Cuando dos fechas comparten el mismo año inferido pero una es final de año (mes ≥ 10)
+   * y la otra es principio (mes ≤ 3), asumimos que cruzan el cambio de año.
+   */
+  private compareFlightDates(a: Pass, b: Pass): number {
+    const da = a.flight_date;
+    const db = b.flight_date;
+    if (!da && !db) return 0;
+    if (!da) return 1;
+    if (!db) return -1;
+
+    const [ay, am, ad] = da.split('-').map(Number);
+    const [by, bm, bd] = db.split('-').map(Number);
+
+    // Si años distintos o años explícitos → comparación directa
+    if (ay !== by || a.has_explicit_year || b.has_explicit_year) {
+      if (ay !== by) return ay - by;
+      if (am !== bm) return am - bm;
+      return ad - bd;
+    }
+
+    // Ambos comparten año inferido y sin año explícito.
+    // Si hay un salto grande de mes (≥ 6 meses de diferencia), la fecha
+    // con mes más bajo pertenece al año siguiente.
+    const monthGap = Math.abs(am - bm);
+    if (monthGap >= 6) {
+      // El mes más bajo (enero-marzo) va DESPUÉS → es del año siguiente
+      if (am <= 3 && bm >= 10) return 1;
+      if (bm <= 3 && am >= 10) return -1;
+    }
+    // Mismo año: orden natural por mes y día
+    if (am !== bm) return am - bm;
+    return ad - bd;
+  }
+
   private buildGroups(passes: Pass[]): { name: string; passes: Pass[] }[] {
     const map = new Map<string, Pass[]>();
     for (const p of passes) {
@@ -254,9 +286,8 @@ export class ItineraryPage {
     const groups: { name: string; passes: Pass[] }[] = [];
     for (const [, list] of map) {
       list.sort((a, b) => {
-        const da = a.flight_date || '9999-99-99';
-        const db = b.flight_date || '9999-99-99';
-        if (da !== db) return da < db ? -1 : 1;
+        const dateCmp = this.compareFlightDates(a, b);
+        if (dateCmp !== 0) return dateCmp;
         const ta = a.flight_time || '99:99';
         const tb = b.flight_time || '99:99';
         return ta < tb ? -1 : 1;

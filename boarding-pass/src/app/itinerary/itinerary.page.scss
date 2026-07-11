@@ -44,13 +44,17 @@
     margin-bottom: var(--space-3);
 
     ion-chip {
-      --background: var(--paper);
-      --color: var(--navy);
-      border: 1px solid var(--paper-line);
-      font-weight: 500;
-      font-size: var(--fs-tiny);
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
+      font-size: var(--fs-small);
+      font-weight: 600;
+      height: auto;
+      padding: 6px 14px;
+      margin: 0;
+      border-radius: 20px;
+      --background: var(--teal-soft);
+      --color: var(--teal);
+      border: none;
+      letter-spacing: 0;
+      text-transform: none;
     }
   }
 
@@ -66,7 +70,7 @@
 
 // --- Section ---
 .section {
-  padding: var(--space-5) var(--space-4) var(--space-8);
+  padding: var(--space-4) var(--space-3) var(--space-8);
   max-width: 720px;
   margin: 0 auto;
   position: relative;
@@ -258,20 +262,21 @@
   &__activities {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-1);
+    gap: var(--space-2);
     margin-top: var(--space-2);
 
     ion-chip {
-      font-size: 9px;
+      font-size: var(--fs-small);
       height: auto;
-      padding: 2px 8px;
+      padding: 6px 14px;
       margin: 0;
-      background: var(--paper-soft);
-      color: var(--navy-soft);
-      border: 1px solid var(--paper-line);
+      --background: var(--teal-soft);
+      --color: var(--teal);
+      border: none;
       text-transform: none;
       letter-spacing: 0;
-      font-weight: 500;
+      font-weight: 600;
+      border-radius: 20px;
     }
   }
 
@@ -297,6 +302,40 @@
   position: relative;
   z-index: 1;
 
+  ion-chip {
+    font-size: var(--fs-small);
+    font-weight: 600;
+    height: auto;
+    padding: 6px 14px;
+    margin: 0;
+    border-radius: 20px;
+    --background: var(--teal-soft);
+    --color: var(--teal);
+    border: none;
+  }
+
+  .card-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+  }
+
+  // highlight for historical sites
+  .curiosity {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding: var(--space-3);
+    background: var(--amber-soft);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-small);
+    font-style: italic;
+    color: var(--navy);
+
+    ion-icon { color: var(--amber); flex-shrink: 0; margin-top: 1px; }
+  }
+
   .tips-list {
     margin: var(--space-2) 0 0;
     padding-left: var(--space-5);
@@ -311,20 +350,6 @@
   &.historical {
     border-left: 3px solid var(--amber);
   }
-}
-
-.curiosity {
-  display: flex;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  padding: var(--space-3);
-  background: var(--amber-soft);
-  border-radius: var(--radius-sm);
-  font-size: var(--fs-small);
-  font-style: italic;
-  color: var(--navy);
-
-  ion-icon { color: var(--amber); flex-shrink: 0; margin-top: 1px; }
 }
 
 // --- Tips ---
@@ -394,6 +419,15 @@
   z-index: 1;
 
   ion-icon { font-size: 1.2rem; flex-shrink: 0; color: var(--teal); }
+
+  ion-badge {
+    font-size: var(--fs-small);
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 20px;
+    --background: var(--teal-soft);
+    --color: var(--teal);
+  }
 }
 
 .summary-label {
@@ -623,11 +657,11 @@
 
 // --- Accordion group styles (same as result page) ---
 .bill-list {
-  padding: var(--space-4) var(--space-3) var(--space-8);
+  padding: var(--space-3) var(--space-1) var(--space-8);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  max-width: 560px;
+  max-width: 720px;
   margin: 0 auto;
   position: relative;
   z-index: 1;
@@ -696,7 +730,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: 0 var(--space-4) var(--space-4);
+  padding: 0 var(--space-3) var(--space-3);
 }
 
 // --- Static header (single passenger, no accordion) ---

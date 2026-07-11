@@ -18,7 +18,6 @@
 
   <!-- No itinerary yet -->
   <div *ngIf="!loading && !itinerary && !error" class="state-container">
-    <ion-icon name="sparkles-outline" size="large" color="primary"></ion-icon>
     <h2>Sin itinerario</h2>
     <p>Genera un plan de viaje personalizado</p>
     <ion-button class="btn-itinerary" (click)="generateItinerary()" [disabled]="generating">
@@ -73,10 +72,10 @@
         <ion-icon name="ticket-outline"></ion-icon>
         <ion-label>Billetes</ion-label>
       </ion-segment-button>
-      <ion-segment-button value="bookings">
+      <!-- <ion-segment-button value="bookings">
         <ion-icon name="reader-outline"></ion-icon>
         <ion-label>Reservas</ion-label>
-      </ion-segment-button>
+      </ion-segment-button> -->
       <ion-segment-button value="eat" *ngIf="itinerary">
         <ion-icon name="restaurant-outline"></ion-icon>
         <ion-label>Comer</ion-label>
@@ -103,19 +102,7 @@
 
       <div class="bill-list" *ngIf="groups.length">
         <ng-container *ngIf="groups.length === 1; else multiAccordion">
-          <div class="person-group" *ngFor="let grp of groups">
-            <div class="person-header person-header--static">
-              <div class="person-header__left">
-                <span class="person-header__name">{{ grp.name }}</span>
-              </div>
-              <div class="person-header__right">
-                <span class="person-header__count">{{ grp.passes.length }} billete{{ grp.passes.length > 1 ? 's' : '' }}</span>
-              </div>
-            </div>
-            <div class="person-passes">
-              <ng-container *ngTemplateOutlet="passCard; context: { $implicit: grp.passes }"></ng-container>
-            </div>
-          </div>
+          <ng-container *ngTemplateOutlet="passCard; context: { $implicit: groups[0].passes }"></ng-container>
         </ng-container>
         <ng-template #multiAccordion>
           <div class="person-group" *ngFor="let grp of groups; let i = index">
@@ -157,8 +144,8 @@
               </div>
               <div class="bp-header__meta">
                 <span class="bp-header__airline">{{ getAirlineName(pass.airline) || (pass.kind === 'train' ? 'Tren' : pass.format) }}</span>
-                <span class="bp-header__divider">·</span>
-                <span class="mono bp-header__flight">{{ pass.airline }}{{ pass.flight || pass.train || '' }}</span>
+                <span class="bp-header__divider"></span>
+                <span class="mono bp-header__flight">{{ pass.kind === 'train' ? (pass.train || '') : (pass.airline || '') + (pass.flight || '') }}</span>
                 <span class="bp-header__divider" *ngIf="pass.flight_date">·</span>
                 <span class="mono bp-header__date" *ngIf="pass.flight_date">{{ formatDate(pass) }}</span>
               </div>
@@ -172,6 +159,10 @@
               <div class="bp-info__cell">
                 <span class="bp-info__label">PNR</span>
                 <span class="bp-info__value mono">{{ pass.pnr || '—' }}</span>
+              </div>
+              <div class="bp-info__cell">
+                <span class="bp-info__label">{{ pass.kind === 'train' ? 'OPERADOR' : 'COMPAÑÍA' }}</span>
+                <span class="bp-info__value">{{ getAirlineName(pass.airline) || (pass.kind === 'train' ? 'Renfe' : pass.format) }}</span>
               </div>
               <div class="bp-info__cell">
                 <span class="bp-info__label">{{ pass.kind === 'train' ? 'TREN' : 'VUELO' }}</span>
@@ -210,7 +201,7 @@
     </div>
 
     <!-- RESERVAS -->
-    <div class="section" *ngIf="activeTab === 'bookings'">
+    <!-- <div class="section" *ngIf="activeTab === 'bookings'">
       <div *ngIf="segments.length === 0" class="empty-tab">
         <p>No hay reservas añadidas.</p>
       </div>
@@ -225,7 +216,7 @@
         <ion-icon name="create-outline" slot="start"></ion-icon>
         Editar reservas
       </ion-button>
-    </div>
+    </div> -->
 
     <!-- PLAN DIARIO -->
     <div class="section" *ngIf="activeTab === 'plan' && itinerary?.daily_itinerary?.length">
@@ -302,9 +293,9 @@
         </ion-card-header>
         <ion-card-content>
           <p>{{ h.description }}</p>
-          <ion-chip *ngFor="let hl of h.highlights" color="secondary" outline>
-            <ion-label>{{ hl }}</ion-label>
-          </ion-chip>
+          <div class="card-chips" *ngIf="h.highlights?.length">
+            <ion-chip *ngFor="let hl of h.highlights">{{ hl }}</ion-chip>
+          </div>
         </ion-card-content>
       </ion-card>
     </div>
@@ -320,9 +311,9 @@
         </ion-card-header>
         <ion-card-content>
           <p>{{ p.description }}</p>
-          <ul class="tips-list">
-            <li *ngFor="let t of p.tips">{{ t }}</li>
-          </ul>
+          <div class="card-chips" *ngIf="p.tips?.length">
+            <ion-chip *ngFor="let t of p.tips">{{ t }}</ion-chip>
+          </div>
         </ion-card-content>
       </ion-card>
 
@@ -404,3 +395,12 @@
     </div>
   </div>
 </ion-content>
+
+<!-- Generating overlay -->
+<div class="proc-overlay" *ngIf="generating">
+  <div class="proc-card">
+    <ion-spinner name="dots" color="primary"></ion-spinner>
+    <p class="proc-card__title">Creando itinerario</p>
+    <p class="proc-card__count">Buscando las mejores recomendaciones…</p>
+  </div>
+</div>
