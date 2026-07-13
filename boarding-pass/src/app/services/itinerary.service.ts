@@ -67,6 +67,7 @@ export interface DailyPlan {
 export interface ItineraryData {
   destination_overview?: string;
   weather_summary?: string;
+  _validation?: { is_valid: boolean; errors: string[]; warnings: string[] };
   weather: WeatherDay[];
   restaurants: Restaurant[];
   hotels: Hotel[];

@@ -16,6 +16,7 @@ from openai import OpenAI
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from parser import infer_years
+from content_validator import validate_itinerary, validate_quiz
 
 # --- Configuracion ---
 
@@ -1482,6 +1483,10 @@ async def generate_itinerary(
     if session_id and response.usage:
         itinerary["_token_usage"] = token_stats
 
+    # Segundo check de contenido IA: coherencia, alucinaciones, repeticiones
+    validation = validate_itinerary(itinerary)
+    itinerary["_validation"] = validation
+
     return itinerary
 
 
@@ -1884,7 +1889,11 @@ Responde UNICAMENTE con el JSON. Sin markdown, sin explicaciones.
 
     validated = _validate_quiz_questions(questions)
     _shuffle_quiz_options(validated)
-    return {"questions": validated, "destinations": destinations}
+
+    # Segundo check de contenido IA para el cuestionario
+    quiz_validation = validate_quiz(validated)
+
+    return {"questions": validated, "destinations": destinations, "_validation": quiz_validation}
 
 
 def _shuffle_quiz_options(questions: list[dict]):
