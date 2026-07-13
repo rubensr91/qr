@@ -21,16 +21,15 @@ from pathlib import Path
 from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-# Path al script existente (en la raiz del proyecto, no en backend/)
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+BACKEND = Path(__file__).resolve().parent
+sys.path.insert(0, str(BACKEND))
 
-from .qr_client import extract_codes, extract_codes_from_image  # noqa: E402
-from .itinerary import generate_itinerary, generate_trip_name  # noqa: E402
-from .parser import infer_years, parse_code  # noqa: E402
-from .token_tracker import check_limit, get_usage  # noqa: E402
-from .token_tracker import _ensure_table as _ensure_token_table  # noqa: E402
-from .admin import router as admin_router  # noqa: E402
+from qr_client import extract_codes, extract_codes_from_image  # noqa: E402
+from itinerary import generate_itinerary, generate_trip_name  # noqa: E402
+from parser import infer_years, parse_code  # noqa: E402
+from token_tracker import check_limit, get_usage  # noqa: E402
+from token_tracker import _ensure_table as _ensure_token_table  # noqa: E402
+from admin import router as admin_router  # noqa: E402
 
 DB_PATH = Path(__file__).resolve().parent / "trips.db"
 

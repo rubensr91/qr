@@ -6,12 +6,15 @@ Open-Meteo: prediccion meteorologica gratuita sin API key.
 """
 
 import json
+import sys
 from datetime import datetime, date
+from pathlib import Path
 
 import httpx
 from openai import OpenAI
 
-from .parser import infer_years
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from parser import infer_years
 
 # --- Configuracion ---
 
@@ -1180,7 +1183,7 @@ async def generate_itinerary(
 
         # Registrar consumo real de tokens de la API
         if session_id and response.usage:
-            from .token_tracker import record_usage
+            from token_tracker import record_usage
             token_stats = record_usage(
                 session_id,
                 response.usage.prompt_tokens,
