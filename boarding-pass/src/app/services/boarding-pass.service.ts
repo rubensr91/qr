@@ -8,6 +8,7 @@ export interface Pass {
   format: string;
   kind?: string;
   name?: string | null;
+  passenger_names?: string[];
   pnr?: string | null;
   from?: string;
   to?: string;

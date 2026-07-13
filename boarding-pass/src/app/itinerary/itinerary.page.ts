@@ -23,6 +23,79 @@ const SEGMENT_LABELS: Record<string, string> = {
   car: 'Coche', restaurant: 'Restaurante', activity: 'Actividad',
 };
 
+/** Normaliza nombre de pasajero a formato canonico 'Nombre Apellido1 Apellido2'.
+ *  Convierte 'APELLIDO/NOMBRE' -> 'Nombre Apellido', quita acentos.
+ *  Maneja tambien formato Renfe con puntos: 'I.Apellido1.Apellido2'
+ *  Se usa para DISPLAY (mostrar en la UI), no para comparacion.
+ */
+function normalizePassengerName(name: string): string {
+  if (!name) return name;
+  name = name.trim();
+
+  let words: string[];
+  if (name.includes('.') && !name.includes(' ')) {
+    words = name.split('.').filter(w => w.length > 0);
+  } else if (name.includes('/')) {
+    const parts = name.split('/');
+    const surnames = parts[0].trim();
+    const firstName = (parts[1] || '').trim();
+    words = [...firstName.split(/\s+/), ...surnames.split(/\s+/)];
+  } else {
+    words = name.split(/\s+/);
+  }
+
+  return words
+    .filter(w => w.length > 0)
+    .map(w => {
+      const normalized = w.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+/** Extrae los apellidos de un nombre y devuelve una clave para COMPARACION.
+ *  Lowercase, sin acentos, solo letras (sin espacios ni simbolos).
+ *  Version TypeScript de get_surname_key() en extraer_qr_pdfs.py.
+ *
+ *  Formatos: 'APELLIDO/NOMBRE', 'Nombre Apellido', 'I.Apellido1.Apellido2'
+ *  Ej: 'R.serena.roas' y 'Ruben Serena Roas' -> ambos 'serenaroas'
+ */
+function getSurnameKey(name: string): string {
+  if (!name) return '';
+  name = name.trim();
+
+  let surnamePart: string;
+  // Formato con puntos (Renfe): "R.serena.roas" -> saltar inicial
+  if (name.includes('.') && !name.includes(' ')) {
+    const parts = name.split('.');
+    surnamePart = parts.length > 1 ? parts.slice(1).join(' ') : name;
+  } else if (name.includes('/')) {
+    surnamePart = name.split('/')[0].trim();
+  } else {
+    const words = name.split(/\s+/);
+    if (words.length <= 1) return '';
+    surnamePart = words.slice(1).join(' ');
+  }
+
+  return surnamePart
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+}
+
+/** Selecciona el nombre mas completo del grupo para mostrar en la UI. */
+function selectDisplayName(names: string[]): string {
+  return names.reduce((best, n) => {
+    const current = n.trim();
+    if (!current) return best;
+    const currParts = current.split(/[.\s]+/).filter(x => x.length > 0).length;
+    const bestParts = best.split(/[.\s]+/).filter(x => x.length > 0).length;
+    if (currParts > bestParts) return current;
+    if (currParts === bestParts && current.length > best.length) return current;
+    return best;
+  }, names[0]?.trim() || 'Sin nombre');
+}
+
 const AIRLINE_NAMES: Record<string, string> = {
   IB: 'Iberia', I2: 'Iberia Express', VY: 'Vueling', V7: 'Volotea',
   FR: 'Ryanair', U2: 'easyJet', W6: 'Wizz Air', EW: 'Eurowings',
@@ -277,14 +350,23 @@ export class ItineraryPage {
   }
 
   private buildGroups(passes: Pass[]): { name: string; passes: Pass[] }[] {
-    const map = new Map<string, Pass[]>();
+    // Agrupar por APELLIDOS (lowercase, solo letras) para detectar
+    // el mismo pasajero aunque el nombre cambie de formato entre operadores.
+    const map = new Map<string, { passes: Pass[]; names: string[] }>();
     for (const p of passes) {
-      const key = (p.name || 'Sin nombre').toUpperCase();
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(p);
+      // Un pase puede tener varios pasajeros (dedup backend). Distribuirlos.
+      const names = (p.passenger_names?.length ? p.passenger_names : [p.name || '']);
+      for (const n of names) {
+        const key = getSurnameKey(n) || 'Sin nombre';
+        if (!map.has(key)) map.set(key, { passes: [], names: [] });
+        const entry = map.get(key)!;
+        if (!entry.passes.includes(p)) entry.passes.push(p);
+        if (!entry.names.includes(n)) entry.names.push(n);
+      }
     }
     const groups: { name: string; passes: Pass[] }[] = [];
-    for (const [, list] of map) {
+    for (const [groupKey, entry] of map) {
+      const { passes: list, names } = entry;
       list.sort((a, b) => {
         const dateCmp = this.compareFlightDates(a, b);
         if (dateCmp !== 0) return dateCmp;
@@ -292,8 +374,8 @@ export class ItineraryPage {
         const tb = b.flight_time || '99:99';
         return ta < tb ? -1 : 1;
       });
-      const originalName = list[0].name || 'Sin nombre';
-      groups.push({ name: originalName, passes: list });
+      // Mostrar el nombre mas completo de los que coinciden con este grupo
+      groups.push({ name: selectDisplayName(names), passes: list });
     }
     groups.sort((a, b) => a.name.localeCompare(b.name));
     return groups;

@@ -153,8 +153,11 @@
 
             <div class="bp-info">
               <div class="bp-info__cell bp-info__cell--wide">
-                <span class="bp-info__label">PASAJERO</span>
-                <span class="bp-info__value">{{ pass.name || '—' }}</span>
+                <span class="bp-info__label">PASAJERO{{ (pass.passenger_names?.length ?? 0) > 1 ? 'S' : '' }}</span>
+                <span class="bp-info__value" *ngIf="(pass.passenger_names?.length ?? 0) <= 1">{{ pass.name || '—' }}</span>
+                <span class="bp-info__value bp-passengers" *ngIf="(pass.passenger_names?.length ?? 0) > 1">
+                  <span *ngFor="let n of pass.passenger_names; let last = last">{{ n }}<span *ngIf="!last">, </span></span>
+                </span>
               </div>
               <div class="bp-info__cell">
                 <span class="bp-info__label">PNR</span>

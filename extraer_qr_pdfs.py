@@ -24,8 +24,7 @@ import io
 import os
 import re
 import sys
-import re
-import sys
+import unicodedata
 
 import fitz
 from PIL import Image
@@ -51,6 +50,100 @@ SUPPORTED_FORMATS = (
 SKIP_PATTERNS = (
     re.compile(r"^https?://", re.IGNORECASE),
 )
+
+
+def normalize_passenger_name(name: str) -> str:
+    """Normaliza nombre de pasajero a formato canonico 'Nombre Apellido1 Apellido2'.
+
+    Convierte formatos:
+      - 'APELLIDO/NOMBRE'            -> 'Nombre Apellido'
+      - 'APELLIDO1 APELLIDO2/NOMBRE' -> 'Nombre Apellido1 Apellido2'
+      - 'nombre apellido1 apellido2' -> 'Nombre Apellido1 Apellido2' (capitaliza)
+      - 'I.Apellido1.Apellido2'      -> 'I Apellido1 Apellido2' (Renfe)
+      - 'NOMBRE APELLIDO'            -> 'Nombre Apellido'
+
+    Quita acentos (é -> e, ó -> o, etc.) para que nombres con y sin tilde
+    se puedan comparar correctamente entre operadores (Renfe vs Ouigo).
+    """
+    if not name or not name.strip():
+        return name
+
+    name = name.strip()
+
+    # Formato con puntos (Renfe): "R.serena.roas" -> palabras separadas
+    if '.' in name and ' ' not in name:
+        parts = name.split('.')
+        words = [p for p in parts if p]
+    elif '/' in name:
+        # Formato APELLIDO/NOMBRE: los apellidos van antes de '/'
+        parts = name.split('/')
+        surnames_str = parts[0].strip()
+        first_name_str = parts[1].strip() if len(parts) > 1 else ''
+        surname_words = surnames_str.split()
+        first_words = first_name_str.split()
+        words = first_words + surname_words
+    else:
+        words = name.split()
+
+    # Capitalizar y quitar acentos
+    result = []
+    for w in words:
+        if not w:
+            continue
+        w = unicodedata.normalize('NFKD', w)
+        w = w.encode('ascii', 'ignore').decode('ascii')
+        if not w:
+            continue
+        w = w.capitalize()
+        result.append(w)
+
+    return ' '.join(result)
+
+
+def get_surname_key(name: str) -> str:
+    """Extrae los apellidos de un nombre y devuelve una clave de comparacion.
+
+    Solo para matching, NUNCA para mostrar. Convierte a lowercase, quita
+    acentos, y elimina cualquier caracter que no sea letra.
+
+    Formatos soportados:
+      - 'APELLIDO/NOMBRE'              -> 'apellido'
+      - 'APELLIDO1 APELLIDO2/NOMBRE'   -> 'apellido1apellido2'
+      - 'Nombre Apellido1 Apellido2'   -> 'apellido1apellido2'
+      - 'Nombre Apellido'              -> 'apellido'
+      - 'I.Apellido1.Apellido2'        -> 'apellido1apellido2' (Renfe)
+
+    Ejemplo: 'R.serena.roas' y 'Ruben Serena Roas' -> ambos 'serenaroas'
+    """
+    if not name or not name.strip():
+        return ''
+
+    name = name.strip()
+
+    # Formato con puntos (Renfe): "R.serena.roas" -> partes = ["R","serena","roas"]
+    # La primera parte es la inicial del nombre, el resto son apellidos
+    if '.' in name and ' ' not in name:
+        parts = name.split('.')
+        if len(parts) > 1:
+            surname_part = ' '.join(parts[1:])  # saltar inicial
+        else:
+            surname_part = name
+    elif '/' in name:
+        # Formato APELLIDO/NOMBRE: los apellidos estan antes de '/'
+        surname_part = name.split('/')[0].strip()
+    else:
+        # Formato 'Nombre Apellido1 Apellido2': apellidos = todo tras el nombre
+        words = name.split()
+        if len(words) <= 1:
+            return ''
+        surname_part = ' '.join(words[1:])
+
+    # Lowercase + quitar acentos + solo letras (sin espacios, sin numeros, sin simbolos)
+    surname_part = unicodedata.normalize('NFKD', surname_part.lower())
+    surname_part = surname_part.encode('ascii', 'ignore').decode('ascii')
+    surname_part = re.sub(r'[^a-z]', '', surname_part)
+
+    return surname_part
 
 
 def _should_skip(text):
@@ -203,18 +296,20 @@ def extract_codes(pdf_path, out_dir):
         if os.path.isdir(_BACKEND) and _BACKEND not in _sys.path:
             _sys.path.insert(0, _BACKEND)
         from parser import parse_code
-        # Agrupar por (pagina, identificador-de-ticket)
+        # Agrupar por (pagina, tipo, numero-de-tren/vuelo).
+        # NOTA: NO usamos PNR en la clave para trenes porque Renfe
+        # produce PNRs distintos entre QR compacto y Aztec (ej: "115G8HJG8"
+        # vs "" por ser "CNO"). Tambien evitamos la fecha porque el QR
+        # compacto puede parsear fechas incorrectas (ej: 31 agosto en vez
+        # de 4 julio). Nos quedamos con el texto mas largo (Aztec = mas fiable).
         groups: dict[tuple, list[tuple]] = {}
         for tup in results.values():
             page, fname, b64, text, fmt, origin = tup
             parsed = parse_code(text)
             if not parsed:
                 continue
-            # Identificador unico del ticket segun el formato
-            # NO usamos la fecha porque en QR compacto sale mal; usamos
-            # solo (page, tipo, codigo) y descartamos por texto mas largo.
             if parsed.get("kind") == "train":
-                tid = ("train", parsed.get("train"), parsed.get("pnr"))
+                tid = ("train", parsed.get("train"))  # sin PNR
             elif parsed.get("airline"):
                 tid = ("flight", parsed.get("airline"), parsed.get("flight"))
             else:
@@ -349,7 +444,7 @@ def _extract_text_fields_from_doc(doc):
             if '/' in val or (' ' in val and len(val) >= 6) or len(val) >= 4:
                 # Evitar falsos positivos
                 if not any(w in val.lower() for w in ('minutos','antes','salida','mascotas','olvides','equipaje','billete','ouigo')):
-                    page_fields["name"] = val
+                    page_fields["name"] = normalize_passenger_name(val)
 
         # OUIGO: origen/destino en formato "Ciudad - Estacion" (lineas propias)
         if not page_fields.get("from") or not page_fields.get("to"):
@@ -369,7 +464,7 @@ def _extract_text_fields_from_doc(doc):
                 text,
             )
             if m:
-                page_fields["name"] = m.group(1).strip()
+                page_fields["name"] = normalize_passenger_name(m.group(1))
 
         # OUIGO: tren (5 digitos tras la fecha)
         m = re.search(r"\d{2}\.\d{2}\.\d{4}\s*\n\s*(\d{5})", text)

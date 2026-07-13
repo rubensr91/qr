@@ -3,6 +3,86 @@ import { Router } from '@angular/router';
 import { ToastController } from '@ionic/angular';
 import { BarcodeImage, BoardingPassService, Pass } from '../services/boarding-pass.service';
 
+/** Normaliza nombre de pasajero a formato canonico 'Nombre Apellido1 Apellido2'.
+ *  Convierte 'APELLIDO/NOMBRE' -> 'Nombre Apellido', quita acentos.
+ *  Maneja tambien formato Renfe con puntos: 'I.Apellido1.Apellido2'
+ *  Se usa para DISPLAY (mostrar en la UI), no para comparacion.
+ */
+function normalizePassengerName(name: string): string {
+  if (!name) return name;
+  name = name.trim();
+
+  let words: string[];
+  // Formato con puntos (Renfe): "R.serena.roas" -> palabras separadas
+  if (name.includes('.') && !name.includes(' ')) {
+    words = name.split('.').filter(w => w.length > 0);
+  } else if (name.includes('/')) {
+    const parts = name.split('/');
+    const surnames = parts[0].trim();
+    const firstName = (parts[1] || '').trim();
+    words = [...firstName.split(/\s+/), ...surnames.split(/\s+/)];
+  } else {
+    words = name.split(/\s+/);
+  }
+
+  return words
+    .filter(w => w.length > 0)
+    .map(w => {
+      const normalized = w.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+/** Extrae los apellidos de un nombre y devuelve una clave para COMPARACION.
+ *  Lowercase, sin acentos, solo letras (sin espacios ni simbolos).
+ *  Version TypeScript de get_surname_key() en extraer_qr_pdfs.py.
+ *
+ *  Formatos: 'APELLIDO/NOMBRE', 'Nombre Apellido', 'I.Apellido1.Apellido2'
+ *  Ej: 'R.serena.roas' y 'Ruben Serena Roas' -> ambos 'serenaroas'
+ */
+function getSurnameKey(name: string): string {
+  if (!name) return '';
+  name = name.trim();
+
+  let surnamePart: string;
+  // Formato con puntos (Renfe): "R.serena.roas" -> saltar inicial
+  if (name.includes('.') && !name.includes(' ')) {
+    const parts = name.split('.');
+    surnamePart = parts.length > 1 ? parts.slice(1).join(' ') : name;
+  } else if (name.includes('/')) {
+    // APELLIDO/NOMBRE -> apellidos antes de '/'
+    surnamePart = name.split('/')[0].trim();
+  } else {
+    // Nombre Apellido1 Apellido2 -> apellidos = todo tras primer nombre
+    const words = name.split(/\s+/);
+    if (words.length <= 1) return '';
+    surnamePart = words.slice(1).join(' ');
+  }
+
+  return surnamePart
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // quitar acentos
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');  // solo letras
+}
+
+/** Selecciona el nombre mas completo del grupo para mostrar en la UI.
+ *  Prefiere mas partes (nombre + dos apellidos > nombre + un apellido)
+ *  y a igual numero de partes, el string mas largo.
+ *  Cuenta partes separadas por espacios O puntos (formato Renfe).
+ */
+function selectDisplayName(names: string[]): string {
+  return names.reduce((best, n) => {
+    const current = n.trim();
+    if (!current) return best;
+    const currParts = current.split(/[.\s]+/).filter(x => x.length > 0).length;
+    const bestParts = best.split(/[.\s]+/).filter(x => x.length > 0).length;
+    if (currParts > bestParts) return current;
+    if (currParts === bestParts && current.length > best.length) return current;
+    return best;
+  }, names[0]?.trim() || 'Sin nombre');
+}
+
 export interface PassengerGroup {
   name: string;
   passes: Pass[];
@@ -48,14 +128,24 @@ export class ResultPage {
   }
 
   private buildGroups(passes: Pass[]): PassengerGroup[] {
-    const map = new Map<string, Pass[]>();
+    // Agrupar por APELLIDOS (lowercase, solo letras) para detectar
+    // el mismo pasajero aunque el nombre cambie de formato entre operadores.
+    // Ej: 'GARCIA PEREZ/JUAN' y 'Juan Garcia Perez' -> misma clave 'garciaperez'
+    const map = new Map<string, { passes: Pass[]; names: string[] }>();
     for (const p of passes) {
-      const key = (p.name || 'Sin nombre').toUpperCase();
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(p);
+      // Un pase puede tener varios pasajeros (dedup backend). Distribuirlos.
+      const names = (p.passenger_names?.length ? p.passenger_names : [p.name || '']);
+      for (const n of names) {
+        const key = getSurnameKey(n) || 'Sin nombre';
+        if (!map.has(key)) map.set(key, { passes: [], names: [] });
+        const entry = map.get(key)!;
+        if (!entry.passes.includes(p)) entry.passes.push(p);
+        if (!entry.names.includes(n)) entry.names.push(n);
+      }
     }
     const groups: PassengerGroup[] = [];
-    for (const [key, list] of map) {
+    for (const [key, entry] of map) {
+      const { passes: list, names } = entry;
       // Orden cronologico: flight_date asc, flight_time asc (nulls al final)
       list.sort((a, b) => {
         const da = a.flight_date || '9999-99-99';
@@ -65,9 +155,8 @@ export class ResultPage {
         const tb = b.flight_time || '99:99';
         return ta < tb ? -1 : 1;
       });
-      // Usar el nombre original del primer pase del grupo
-      const originalName = list[0].name || 'Sin nombre';
-      groups.push({ name: originalName, passes: list });
+      // Mostrar el nombre mas completo de los que coinciden con este grupo
+      groups.push({ name: selectDisplayName(names), passes: list });
     }
     // Ordenar grupos alfabeticamente por nombre
     groups.sort((a, b) => a.name.localeCompare(b.name));

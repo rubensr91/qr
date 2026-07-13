@@ -247,6 +247,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.bp-info__value.bp-passengers {
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+}
 
 // --- Barcode ---
 .bp-barcode {

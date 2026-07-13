@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from extraer_qr_pdfs import normalize_passenger_name, get_surname_key  # noqa: E402
 from .qr_client import extract_codes, extract_codes_from_image  # noqa: E402
 from .itinerary import generate_itinerary, generate_trip_name  # noqa: E402
 from .parser import infer_years, parse_code  # noqa: E402
@@ -317,6 +318,18 @@ async def extract(file: UploadFile = File(...)):
         })
     if descartados:
         print(f"[extract] {descartados} pases descartados por datos incompletos")
+
+    # --- Normalizar nombres de pasajeros ---
+    # Unifica formatos: 'APELLIDO/NOMBRE' -> 'Nombre Apellido',
+    # quita acentos para que Renfe y Ouigo produzcan el mismo nombre.
+    for p in passes:
+        if p.get("name"):
+            p["name"] = normalize_passenger_name(p["name"])
+
+    # Cada billete es individual por pasajero.
+    # El barcode-dedup por página ya se hace en extraer_qr_pdfs.py.
+    for p in passes:
+        p["passenger_names"] = [(p.get("name") or "").strip()] if p.get("name") else []
 
     # Inferir años para vuelos sin año explícito (Ryanair, etc.)
     infer_years(passes)
