@@ -118,11 +118,13 @@ def _validate_single_day(day: dict, idx: int, r: dict):
     required = [
         ("day_number", "number"),
         ("date", "string"),
-        ("city", "string"),
         ("theme", "string"),
         ("morning", "object"),
         ("afternoon", "object"),
         ("evening", "object"),
+    ]
+    optional = [
+        ("city", "string"),
         ("travel_reminders", "object"),
         ("meal_suggestions", "object"),
     ]
@@ -139,6 +141,14 @@ def _validate_single_day(day: dict, idx: int, r: dict):
         elif ftype == "string" and not isinstance(day.get(field), str):
             r["is_valid"] = False
             r["errors"].append(f"Día {idx + 1}: '{field}' debe ser tipo string")
+    for field, ftype in optional:
+        val = day.get(field)
+        if val is None:
+            continue
+        if ftype == "object" and not isinstance(val, dict):
+            r["warnings"].append(f"Día {idx + 1}: '{field}' debe ser un objeto, ignorado")
+        elif ftype == "string" and not isinstance(val, str):
+            r["warnings"].append(f"Día {idx + 1}: '{field}' debe ser tipo string, ignorado")
     for slot_name in ("morning", "afternoon", "evening"):
         _validate_slot(day.get(slot_name), slot_name, idx, r)
     _validate_date(day.get("date", ""), f"Día {idx + 1}", r)

@@ -541,10 +541,13 @@ def get_trip_itinerary(trip_id: int, request: Request, x_session_id: str = Heade
     if not itinerary_data:
         raise HTTPException(status_code=404, detail="Itinerario no generado aun")
 
+    itinerary = json.loads(itinerary_data)
+    itinerary.pop("_validation", None)
+    itinerary.pop("_token_usage", None)
     return {
         "trip_id": trip_id,
         "cached": True,
-        "itinerary": json.loads(itinerary_data),
+        "itinerary": itinerary,
     }
 
 
@@ -572,6 +575,8 @@ async def generate_trip_itinerary(trip_id: int, request: Request, x_session_id: 
     if cached:
         cached_it = json.loads(cached)
         if not cached_it.get("parse_error") and not cached_it.get("error"):
+            cached_it.pop("_validation", None)
+            cached_it.pop("_token_usage", None)
             conn.close()
             return {
                 "trip_id": trip_id,
@@ -612,12 +617,13 @@ async def generate_trip_itinerary(trip_id: int, request: Request, x_session_id: 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando itinerario: {e}")
 
-    # Guardar en BD (solo si no tiene errores)
+    # Guardar en BD (solo si no tiene errores, sin metadatos internos)
     if not itinerary.get("parse_error") and not itinerary.get("error"):
+        storage = {k: v for k, v in itinerary.items() if not k.startswith("_")}
         conn = _get_db()
         conn.execute(
             "UPDATE trips SET itinerary_data = ? WHERE id = ?",
-            (json.dumps(itinerary, ensure_ascii=False), trip_id),
+            (json.dumps(storage, ensure_ascii=False), trip_id),
         )
         conn.commit()
         conn.close()
