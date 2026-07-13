@@ -286,8 +286,8 @@
     </div>
 
     <!-- RESTAURANTES -->
-    <div class="section" *ngIf="activeTab === 'eat' && itinerary?.restaurants?.length">
-      <ion-card class="rec-card" *ngFor="let r of itinerary!.restaurants">
+    <div class="section" *ngIf="activeTab === 'eat'">
+      <ion-card class="rec-card" *ngFor="let r of itinerary?.restaurants">
         <ion-card-header>
           <ion-card-title>{{ r.name }}</ion-card-title>
           <ion-card-subtitle>{{ r.type }} · {{ r.price_range }}</ion-card-subtitle>
@@ -296,6 +296,9 @@
           <p>{{ r.description }}</p>
         </ion-card-content>
       </ion-card>
+      <div class="empty-tab" *ngIf="!itinerary?.restaurants?.length">
+        <p>Aún no hay recomendaciones de restaurantes.</p>
+      </div>
       <div class="expand-section">
         <ion-button expand="block" fill="outline" class="btn-expand"
                     (click)="expandSection('restaurants')"
@@ -310,8 +313,8 @@
     </div>
 
     <!-- HOTELES -->
-    <div class="section" *ngIf="activeTab === 'sleep' && itinerary?.hotels?.length">
-      <ion-card class="rec-card" *ngFor="let h of itinerary!.hotels">
+    <div class="section" *ngIf="activeTab === 'sleep'">
+      <ion-card class="rec-card" *ngFor="let h of itinerary?.hotels">
         <ion-card-header>
           <ion-card-title>{{ h.name }}</ion-card-title>
           <ion-card-subtitle>{{ h.zone }} · {{ h.price_range }}</ion-card-subtitle>
@@ -323,6 +326,9 @@
           </div>
         </ion-card-content>
       </ion-card>
+      <div class="empty-tab" *ngIf="!itinerary?.hotels?.length">
+        <p>Aún no hay recomendaciones de alojamiento.</p>
+      </div>
       <div class="expand-section">
         <ion-button expand="block" fill="outline" class="btn-expand"
                     (click)="expandSection('hotels')"
@@ -339,7 +345,7 @@
     <!-- LUGARES DE INTERÉS + SITIOS HISTÓRICOS -->
     <div class="section" *ngIf="activeTab === 'visit'">
       <h3 *ngIf="itinerary?.places_of_interest?.length">Lugares de interés</h3>
-      <ion-card class="rec-card" *ngFor="let p of itinerary!.places_of_interest">
+      <ion-card class="rec-card" *ngFor="let p of itinerary?.places_of_interest">
         <ion-card-header>
           <ion-card-title>{{ p.name }}</ion-card-title>
           <ion-card-subtitle>{{ p.type }}</ion-card-subtitle>
@@ -353,7 +359,7 @@
       </ion-card>
 
       <h3 *ngIf="itinerary?.historical_sites?.length">Sitios históricos</h3>
-      <ion-card class="rec-card historical" *ngFor="let h of itinerary!.historical_sites">
+      <ion-card class="rec-card historical" *ngFor="let h of itinerary?.historical_sites">
         <ion-card-header>
           <ion-card-title>{{ h.name }}</ion-card-title>
           <ion-card-subtitle>{{ h.period }}</ion-card-subtitle>
@@ -366,6 +372,10 @@
           </div>
         </ion-card-content>
       </ion-card>
+
+      <div class="empty-tab" *ngIf="!itinerary?.places_of_interest?.length && !itinerary?.historical_sites?.length">
+        <p>Aún no hay lugares para visitar.</p>
+      </div>
 
       <div class="expand-section">
         <ion-button expand="block" fill="outline" class="btn-expand"
@@ -388,7 +398,7 @@
         </ion-card-header>
         <ion-card-content>
           <ul class="tips-list">
-            <li *ngFor="let t of itinerary!.transport_tips">{{ t }}</li>
+            <li *ngFor="let t of itinerary?.transport_tips">{{ t }}</li>
           </ul>
         </ion-card-content>
       </ion-card>
@@ -399,7 +409,7 @@
         </ion-card-header>
         <ion-card-content>
           <ul class="tips-list">
-            <li *ngFor="let t of itinerary!.general_tips">{{ t }}</li>
+            <li *ngFor="let t of itinerary?.general_tips">{{ t }}</li>
           </ul>
         </ion-card-content>
       </ion-card>
@@ -410,10 +420,14 @@
         </ion-card-header>
         <ion-card-content>
           <ul class="tips-list">
-            <li *ngFor="let t of itinerary!.cultural_notes">{{ t }}</li>
+            <li *ngFor="let t of itinerary?.cultural_notes">{{ t }}</li>
           </ul>
         </ion-card-content>
       </ion-card>
+
+      <div class="empty-tab" *ngIf="!itinerary?.transport_tips?.length && !itinerary?.general_tips?.length && !itinerary?.cultural_notes?.length">
+        <p>Aún no hay consejos disponibles.</p>
+      </div>
 
       <div class="expand-section">
         <ion-button expand="block" fill="outline" class="btn-expand"
@@ -426,20 +440,6 @@
           {{ expandErrors['tips'] }}
         </ion-text>
       </div>
-    </div>
-
-    <!-- Empty tab -->
-    <div class="empty-tab" *ngIf="activeTab === 'eat' && !itinerary?.restaurants?.length">
-      <p>No hay recomendaciones de restaurantes.</p>
-    </div>
-    <div class="empty-tab" *ngIf="activeTab === 'sleep' && !itinerary?.hotels?.length">
-      <p>No hay recomendaciones de hoteles.</p>
-    </div>
-    <div class="empty-tab" *ngIf="activeTab === 'visit' && !itinerary?.places_of_interest?.length && !itinerary?.historical_sites?.length">
-      <p>No hay recomendaciones de lugares para visitar.</p>
-    </div>
-    <div class="empty-tab" *ngIf="activeTab === 'tips' && !itinerary?.transport_tips?.length && !itinerary?.general_tips?.length && !itinerary?.cultural_notes?.length">
-      <p>No hay tips disponibles.</p>
     </div>
   </ng-container>
 

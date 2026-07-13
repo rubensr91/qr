@@ -694,7 +694,36 @@ async def expand_trip_section(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error expandiendo {section}: {e}")
 
+    if result.get("error"):
+        return result
+
+    _merge_and_persist(trip_id, existing_itinerary, section, result)
+
     return result
+
+
+def _merge_and_persist(trip_id: int, existing: dict, section: str, result: dict):
+    merged = existing.copy()
+
+    if section == "restaurants":
+        merged["restaurants"] = existing.get("restaurants", []) + result.get("items", [])
+    elif section == "hotels":
+        merged["hotels"] = existing.get("hotels", []) + result.get("items", [])
+    elif section == "visit":
+        merged["places_of_interest"] = existing.get("places_of_interest", []) + result.get("places_of_interest", [])
+        merged["historical_sites"] = existing.get("historical_sites", []) + result.get("historical_sites", [])
+    elif section == "tips":
+        merged["transport_tips"] = existing.get("transport_tips", []) + result.get("transport_tips", [])
+        merged["general_tips"] = existing.get("general_tips", []) + result.get("general_tips", [])
+        merged["cultural_notes"] = existing.get("cultural_notes", []) + result.get("cultural_notes", [])
+
+    conn = _get_db()
+    conn.execute(
+        "UPDATE trips SET itinerary_data = ? WHERE id = ?",
+        (json.dumps(merged, ensure_ascii=False), trip_id),
+    )
+    conn.commit()
+    conn.close()
 
 
 # --- Token Usage ---

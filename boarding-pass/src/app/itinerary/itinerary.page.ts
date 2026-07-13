@@ -356,12 +356,13 @@ export class ItineraryPage {
           this.toast(resp.error, 'danger');
           return;
         }
-        if (!resp.items?.length) {
+        const count = this.countExpandedItems(section, resp);
+        if (!count) {
           this.toast('No se encontraron más sugerencias', 'warning');
           return;
         }
-        this.appendToSection(section, resp.items);
-        this.toast(`${resp.items.length} sugerencias añadidas`, 'success');
+        this.appendExpandResult(section, resp);
+        this.toast(`${count} sugerencias añadidas`, 'success');
         try { Haptics.impact({ style: ImpactStyle.Medium }); } catch {}
       },
       error: (err: any) => {
@@ -373,28 +374,34 @@ export class ItineraryPage {
     });
   }
 
-  private appendToSection(section: string, items: any[]) {
+  private countExpandedItems(section: string, resp: ExpandResponse): number {
+    switch (section) {
+      case 'restaurants': return (resp.items || []).length;
+      case 'hotels': return (resp.items || []).length;
+      case 'visit': return (resp.places_of_interest || []).length + (resp.historical_sites || []).length;
+      case 'tips': return (resp.transport_tips || []).length + (resp.general_tips || []).length + (resp.cultural_notes || []).length;
+      default: return 0;
+    }
+  }
+
+  private appendExpandResult(section: string, resp: ExpandResponse) {
     if (!this.itinerary) return;
     switch (section) {
       case 'restaurants':
-        this.itinerary.restaurants = [...(this.itinerary.restaurants || []), ...items];
+        this.itinerary.restaurants = [...(this.itinerary.restaurants || []), ...(resp.items || [])];
         break;
       case 'hotels':
-        this.itinerary.hotels = [...(this.itinerary.hotels || []), ...items];
+        this.itinerary.hotels = [...(this.itinerary.hotels || []), ...(resp.items || [])];
         break;
-      case 'visit': {
-        const poi = items.filter((i: any) => i.type && !i.period);
-        const hist = items.filter((i: any) => i.period);
-        this.itinerary.places_of_interest = [...(this.itinerary.places_of_interest || []), ...poi];
-        this.itinerary.historical_sites = [...(this.itinerary.historical_sites || []), ...hist];
+      case 'visit':
+        this.itinerary.places_of_interest = [...(this.itinerary.places_of_interest || []), ...(resp.places_of_interest || [])];
+        this.itinerary.historical_sites = [...(this.itinerary.historical_sites || []), ...(resp.historical_sites || [])];
         break;
-      }
-      case 'tips': {
-        const tips = items.map((i: any) => i.tip || i).filter(Boolean);
-        this.itinerary.transport_tips = [...(this.itinerary.transport_tips || []), ...tips];
-        this.itinerary.general_tips = [...(this.itinerary.general_tips || []), ...tips];
+      case 'tips':
+        this.itinerary.transport_tips = [...(this.itinerary.transport_tips || []), ...(resp.transport_tips || [])];
+        this.itinerary.general_tips = [...(this.itinerary.general_tips || []), ...(resp.general_tips || [])];
+        this.itinerary.cultural_notes = [...(this.itinerary.cultural_notes || []), ...(resp.cultural_notes || [])];
         break;
-      }
     }
     this.itinerary = { ...this.itinerary };
   }

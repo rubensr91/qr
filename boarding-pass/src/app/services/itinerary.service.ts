@@ -88,8 +88,13 @@ export interface ItineraryResponse {
 }
 
 export interface ExpandResponse {
-  items: any[];
   section: string;
+  items?: any[];
+  places_of_interest?: any[];
+  historical_sites?: any[];
+  transport_tips?: string[];
+  general_tips?: string[];
+  cultural_notes?: string[];
   error?: string;
 }
 

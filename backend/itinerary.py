@@ -1250,175 +1250,199 @@ def expand_section(
 ) -> dict:
     """Genera mas recomendaciones de una seccion concreta del itinerario.
 
-    Args:
-        passes: Pases del viaje.
-        segments: Segmentos manuales.
-        existing_itinerary: Itinerario actual completo.
-        section: 'restaurants' | 'hotels' | 'visit' | 'tips'.
-        session_id: ID de sesion para tracking de tokens.
+    Returns dict with either:
+      - {"items": [...], "section": str}
+      - {"error": str}
+      - For "visit": {"places_of_interest": [...], "historical_sites": [...], "section": "visit"}
+      - For "tips": {"transport_tips": [...], "general_tips": [...], "cultural_notes": [...], "section": "tips"}
     """
     from datetime import timedelta
 
     if segments is None:
         segments = []
 
-    # Recalcular metadatos del viaje para el prompt
     flights = [p for p in passes if p.get("kind") == "flight"]
     flights_sorted = _sort_by_date(flights)
     origin_city = _get_city_name(flights_sorted[0].get("from", "")) if flights_sorted else None
 
+    all_dates_set = set()
+    for p in passes:
+        fd = p.get("flight_date")
+        if fd:
+            all_dates_set.add(fd)
+    for s in segments:
+        fd = s.get("date") or s.get("check_in")
+        if fd:
+            all_dates_set.add(fd)
+
+    all_dates = sorted(all_dates_set)
+    dates_str = ", ".join(all_dates) if all_dates else "fechas no especificadas"
+
     all_cities = list(dict.fromkeys(
-        d.get("city") for d in _build_daily_calendar(passes, segments, [])
+        d.get("city") for d in _build_daily_calendar(passes, segments, all_dates)
         if d.get("city")
     ))
     cities = [c for c in all_cities if c != origin_city] or all_cities[:1]
     dest_str = ", ".join(cities) if cities else "destino desconocido"
 
-    # Prompt base segun seccion
-    section_prompts = {
-        "restaurants": {
-            "section_name": "restaurantes",
-            "field": "restaurants",
-            "description": "restaurantes y lugares para comer (no repetir los ya listados)",
-            "keys": ["name", "type", "description", "price_range"],
-            "examples": '{"name": "Can Culleretes", "type": "cocina catalana", "description": "Restaurante hist\u00f3rico en el Barri G\u00f2tic con platos tradicionales", "price_range": "25-40\u20ac"}',
-        },
-        "hotels": {
-            "section_name": "hospedaje",
-            "field": "hotels",
-            "description": "hoteles y alojamientos (no repetir los ya listados)",
-            "keys": ["name", "zone", "description", "price_range", "highlights"],
-            "examples": '{"name": "Hotel Casa Fuster", "zone": "Gr\u00e0cia", "description": "Modernista en el Passeig de Gr\u00e0cia", "price_range": "150-250\u20ac", "highlights": ["terraza", "piscina", "blues bar"]}',
-        },
-        "visit": {
-            "section_name": "lugares que visitar",
-            "field": "visit",
-            "description": "lugares de inter\u00e9s y sitios hist\u00f3ricos (no repetir los ya listados)",
-            "keys": ["name", "type", "description", "tips"],
-            "examples": '{"name": "Park G\u00fcell", "type": "parque", "description": "Obra de Gaud\u00ed con vistas panor\u00e1micas", "tips": ["llegar temprano", "comprar entrada online"]}',
-        },
-        "tips": {
-            "section_name": "consejos y tips",
-            "field": "tips",
-            "description": "consejos \u00fatiles de transporte, cultura general y notas culturales (no repetir los ya listados)",
-            "keys": ["tip"],
-            "examples": '{"tip": "La tarjeta Hola BCN incluye transporte ilimitado"}',
-        },
-    }
-
-    sec = section_prompts.get(section)
-    if not sec:
-        return {"error": f"Secci\u00f3n desconocida: {section}"}
-
-    # Contexto del viaje
-    all_dates = set()
-    for p in passes:
-        fd = p.get("flight_date")
-        if fd:
-            all_dates.add(fd)
-    dates_str = ", ".join(sorted(all_dates)) if all_dates else "fechas no especificadas"
-
-    # Pasajeros
     passenger_names = list(dict.fromkeys(
         p.get("name", "") for p in passes if p.get("name")
     ))
     passengers_str = ", ".join(passenger_names) if passenger_names else "no especificado"
 
-    # Serializar recomendaciones existentes
-    existing_items = []
-    if section == "restaurants":
-        existing_items = existing_itinerary.get("restaurants", [])
-    elif section == "hotels":
-        existing_items = existing_itinerary.get("hotels", [])
-    elif section == "visit":
-        existing_poi = existing_itinerary.get("places_of_interest", [])
-        existing_hist = existing_itinerary.get("historical_sites", [])
-        existing_items = existing_poi + existing_hist
-    elif section == "tips":
-        transport = existing_itinerary.get("transport_tips", [])
-        general = existing_itinerary.get("general_tips", [])
-        cultural = existing_itinerary.get("cultural_notes", [])
-        existing_items = (
-            [{"tip": t} for t in transport]
-            + [{"tip": t} for t in general]
-            + [{"tip": t} for t in cultural]
+    overview = existing_itinerary.get("destination_overview", "")
+    weather = existing_itinerary.get("weather", [])
+    weather_str = ""
+    if weather:
+        weather_str = "\n".join(
+            f"  {w['date']}: {w['condition']}, max {w['temp_max']}°C, min {w['temp_min']}°C"
+            for w in weather[:7]
         )
 
-    existing_str = _serialize_for_prompt(existing_items, sec["keys"]) if existing_items else "(ninguno a\u00fan)"
-
-    # Overview visual del viaje
     passes_str = ""
     for p in passes:
-        route = f"{p.get('from', '?')} \u2192 {p.get('to', '?')}"
-        date_str = p.get("flight_date", "")
-        time_str = p.get("flight_time", "")
-        airline_str = f"{p.get('airline', '')}{p.get('flight', '')}"
-        passes_str += f"  - {route} | {date_str} {time_str} | {airline_str}\n"
+        route = f"{p.get('from', '?')} → {p.get('to', '?')}"
+        d = p.get("flight_date", "")
+        t = p.get("flight_time", "")
+        carrier = p.get("train") or f"{p.get('airline', '')}{p.get('flight', '')}"
+        passes_str += f"  - {route} | {d} {t} | {carrier} | {p.get('kind', 'flight')}\n"
 
-    prompt = f"""Eres un agente de viajes experto. Ya generaste recomendaciones para un viaje y el usuario quiere MAS.
+    seg_str = ""
+    for s in segments:
+        stype = s.get("type", "")
+        if stype == "flight":
+            seg_str += f"  - Vuelo: {s.get('airline','')}{s.get('flight_number','')} {s.get('from','')}→{s.get('to','')} {s.get('date','')} {s.get('time','')}\n"
+        elif stype == "train":
+            seg_str += f"  - Tren: {s.get('operator','')} {s.get('train_number','')} {s.get('from','')}→{s.get('to','')} {s.get('date','')}\n"
+        elif stype == "hotel":
+            seg_str += f"  - Hotel: {s.get('name','')} {s.get('city','')} {s.get('check_in','')}→{s.get('check_out','')}\n"
+        elif stype == "car":
+            seg_str += f"  - Coche: {s.get('company','')} {s.get('city','')} {s.get('pickup_date','')}→{s.get('return_date','')}\n"
+        elif stype == "restaurant":
+            seg_str += f"  - Restaurante: {s.get('name','')} {s.get('city','')} {s.get('date','')}\n"
+        elif stype == "activity":
+            seg_str += f"  - Actividad: {s.get('name','')} {s.get('city','')} {s.get('date','')} - {s.get('description','')}\n"
 
-=== DATOS DEL VIAJE ===
-Destinos: {dest_str}
-Fechas: {dates_str}
-Pasajeros: {passengers_str}
+    section_prompts = {
+        "restaurants": {
+            "section_name": "restaurantes",
+            "existing": _serialize_for_prompt(existing_itinerary.get("restaurants", []), ["name", "type", "price_range"]),
+            "instruction": "Devuelve un array JSON con 3-5 nuevos restaurantes que sean DIFERENTES a los ya listados.",
+            "output_schema": '{"name": "Nombre restaurante", "type": "cocina catalana", "description": "2-3 frases llamativas", "price_range": "15-30€"}',
+        },
+        "hotels": {
+            "section_name": "hospedaje",
+            "existing": _serialize_for_prompt(existing_itinerary.get("hotels", []), ["name", "zone", "price_range"]),
+            "instruction": "Devuelve un array JSON con 3-5 nuevos hoteles/alojamientos DIFERENTES a los ya listados.",
+            "output_schema": '{"name": "Nombre hotel", "zone": "barrio o zona", "description": "2-3 frases", "price_range": "80-150€", "highlights": ["piscina", "vistas"]}',
+        },
+        "visit": {
+            "section_name": "lugares que visitar",
+            "existing": _serialize_for_prompt(
+                existing_itinerary.get("places_of_interest", []) + existing_itinerary.get("historical_sites", []),
+                ["name", "type", "period"],
+            ),
+            "instruction": "Devuelve un objeto JSON con dos arrays: 'places_of_interest' (no historicos) y 'historical_sites' (sitios historicos con 'period' y 'curiosity'). 2-3 por categoria. DIFERENTES a los ya listados.",
+            "output_schema": '{"places_of_interest": [{"name": "...", "type": "museo", "description": "...", "tips": ["..."]}], "historical_sites": [{"name": "...", "period": "s.XIX", "description": "...", "curiosity": "... rumor curioso"}]}',
+        },
+        "tips": {
+            "section_name": "consejos",
+            "existing": _serialize_for_prompt(
+                [{"tip": t} for t in existing_itinerary.get("transport_tips", [])]
+                + [{"tip": t} for t in existing_itinerary.get("general_tips", [])]
+                + [{"tip": t} for t in existing_itinerary.get("cultural_notes", [])],
+                ["tip"],
+            ),
+            "instruction": "Devuelve un objeto JSON con 3 arrays: 'transport_tips', 'general_tips', 'cultural_notes'. 2-3 tips por categoria. DIFERENTES a los ya listados.",
+            "output_schema": '{"transport_tips": ["tip transporte..."], "general_tips": ["tip general..."], "cultural_notes": ["nota cultural..."]}',
+        },
+    }
 
-=== BILLETES DEL VIAJE ===
+    sec = section_prompts.get(section)
+    if not sec:
+        return {"error": "Seccion desconocida"}
+
+    prompt = f"""Eres un guia local experto. El usuario pide MAS recomendaciones para su viaje.
+
+VIAJE: {dest_str}
+FECHAS: {dates_str}
+PASAJEROS: {passengers_str}
+{chr(10) + "RESUMEN: " + overview[:500] if overview else ""}
+
+CLIMA PREVISTO:
+{weather_str or "(no disponible)"}
+
+BILLETES:
 {passes_str if passes_str else "(sin billetes)"}
+RESERVAS MANUALES:
+{seg_str if seg_str else "(ninguna)"}
 
-=== RECOMENDACIONES YA EXISTENTES de {sec['section_name'].upper()} ===
-{existing_str}
+YA RECOMENDADO ({sec['section_name']}):
+{sec['existing']}
 
-=== INSTRUCCIÓN ===
-Genera {sec['description']} que sean DIFERENTES a los ya listados arriba.
-Deben ser relevantes para los destinos, fechas y pasajeros del viaje.
-Devuelve SOLO un array JSON con los nuevos items, sin markdown ni texto adicional.
-Cada item debe seguir esta estructura:
-{sec['examples']}
+{sec['instruction']}
 
-Devuelve un array vacio [] si crees que ya hay suficientes recomendaciones."""
+Estructura esperada del JSON:
+{sec['output_schema']}
+
+Responde SOLO el JSON, sin markdown ni texto alrededor."""
 
     try:
-        client = OpenAI(
-            api_key=DEEPSEEK_API_KEY,
-            base_url=DEEPSEEK_BASE_URL,
-        )
+        client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
         response = client.chat.completions.create(
             model=DEEPSEEK_MODEL,
             messages=[
-                {"role": "system", "content": "Eres un asistente de viajes experto. Responde SIEMPRE solo con JSON valido, sin markdown ni texto adicional."},
+                {"role": "system", "content": "Eres un guia de viajes experto. Responde solo JSON valido, sin markdown."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.5,
+            temperature=0.6,
             max_tokens=4096,
         )
-        content = response.choices[0].message.content or "[]"
+        content = response.choices[0].message.content or "{}"
 
         if session_id and response.usage:
             from token_tracker import record_usage
-            record_usage(
-                session_id,
-                response.usage.prompt_tokens,
-                response.usage.completion_tokens,
-            )
+            record_usage(session_id, response.usage.prompt_tokens, response.usage.completion_tokens)
 
     except Exception as e:
         print(f"[deepseek expand] Error: {e}")
         return {"error": f"Error al expandir {sec['section_name']}: {e}"}
 
-    try:
-        new_items = json.loads(content)
-        if not isinstance(new_items, list):
-            new_items = []
-    except json.JSONDecodeError:
-        # Fallback: intentar extraer JSON del texto
-        import re
-        match = re.search(r'\[.*?\]', content, re.DOTALL)
-        if match:
-            try:
-                new_items = json.loads(match.group())
-            except (json.JSONDecodeError, TypeError):
-                new_items = []
-        else:
-            new_items = []
+    new_items = _parse_expand_response(content, section)
 
-    return {"items": new_items, "section": section}
+    if section == "visit":
+        return {
+            "places_of_interest": new_items.get("places_of_interest", []),
+            "historical_sites": new_items.get("historical_sites", []),
+            "section": section,
+        }
+    if section == "tips":
+        return {
+            "transport_tips": new_items.get("transport_tips", []),
+            "general_tips": new_items.get("general_tips", []),
+            "cultural_notes": new_items.get("cultural_notes", []),
+            "section": section,
+        }
+    if isinstance(new_items, list):
+        return {"items": new_items, "section": section}
+    return {"items": [], "section": section}
+
+
+def _parse_expand_response(content: str, section: str) -> dict | list:
+    """Parsea la respuesta JSON del LLM con fallback robusto."""
+    import re
+
+    try:
+        parsed = json.loads(content)
+        return parsed
+    except json.JSONDecodeError:
+        pass
+
+    match = re.search(r'(\[.*\]|\{.*\})', content, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return [] if section in ("restaurants", "hotels") else {}
