@@ -165,6 +165,9 @@ def _pass_fingerprint(p: dict) -> str:
             (p.get("flight_date") or "").strip(),
             (p.get("flight_time") or "").strip(),
             (p.get("class") or "").strip().upper(),
+            (p.get("name") or "").strip().upper(),
+            (p.get("seat") or "").strip().upper(),
+            (p.get("coach") or "").strip().upper(),
         ]
     else:
         raw = (p.get("raw") or "")[:200]
@@ -330,6 +333,63 @@ async def extract(file: UploadFile = File(...)):
     # El barcode-dedup por página ya se hace en extraer_qr_pdfs.py.
     for p in passes:
         p["passenger_names"] = [(p.get("name") or "").strip()] if p.get("name") else []
+
+    # Renfe: QR compacto + Aztec en misma página/tren. Aztec tiene fecha correcta
+    # (DD/MM/YYYY), QR compacto puede parsear fecha errónea. Conservamos Aztec
+    # (texto más largo) y rellenamos huecos (PNR, etc.) desde el QR.
+    _page_train_groups: dict[tuple, list[int]] = {}
+    for _i, _p in enumerate(passes):
+        if _p.get("kind") == "train" and _p.get("train"):
+            _page_train_groups.setdefault((_p.get("page"), _p.get("train")), []).append(_i)
+
+    _merged_indices: set[int] = set()
+    for _indices in _page_train_groups.values():
+        if len(_indices) <= 1:
+            continue
+        _indices.sort(key=lambda __i: len(passes[__i].get("raw", "")), reverse=True)
+        _base = passes[_indices[0]]
+        for _j in _indices[1:]:
+            _other = passes[_j]
+            for _k, _v in _other.items():
+                if not _base.get(_k):
+                    _base[_k] = _v
+            _merged_indices.add(_j)
+
+    if _merged_indices:
+        passes = [_p for _i, _p in enumerate(passes) if _i not in _merged_indices]
+        print(f"[extract] Renfe QR+Aztec merged: {len(_merged_indices)} duplicados eliminados")
+
+    # Dedup cruzado por página: mismo billete puede aparecer en varias páginas
+    # del PDF (o con dos códigos distintos que representan mismo trayecto).
+    # Si coincide la huella del billete, conservamos un solo pase y unificamos
+    # pasajeros.
+    deduped_passes: list[dict] = []
+    dedup_index: dict[str, dict] = {}
+    for p in passes:
+        fp = _pass_fingerprint(p)
+        if not fp:
+            deduped_passes.append(p)
+            continue
+
+        existing = dedup_index.get(fp)
+        if not existing:
+            dedup_index[fp] = p
+            deduped_passes.append(p)
+            continue
+
+        merged_names = list(existing.get("passenger_names") or [])
+        for name in p.get("passenger_names") or []:
+            if name and name not in merged_names:
+                merged_names.append(name)
+        if merged_names:
+            existing["passenger_names"] = merged_names
+
+        # Completar huecos con datos más ricos del duplicado nuevo.
+        for key, value in p.items():
+            if existing.get(key) in (None, "", [], {}):
+                existing[key] = value
+
+    passes = deduped_passes
 
     # Inferir años para vuelos sin año explícito (Ryanair, etc.)
     infer_years(passes)
