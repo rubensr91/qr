@@ -101,12 +101,16 @@ export class ItineraryPage {
     }
   }
 
-  private afterLoad() {
-    this.activeTab = 'cards';
-    this.loadItinerary();
+  private afterLoad(preserveTab = false) {
+    if (!preserveTab) {
+      this.activeTab = 'cards';
+      this.loadItinerary();
+    } else {
+      this.loading = false;
+    }
   }
 
-  private fetchTripData() {
+  private fetchTripData(preserveTab = false) {
     this.loading = true;
     this.bpSvc.getTrips().subscribe({
       next: (resp: any) => {
@@ -119,7 +123,7 @@ export class ItineraryPage {
           this.tripName = trip.trip_name || trip.filename;
         }
         this.loading = false;
-        this.afterLoad();
+        this.afterLoad(preserveTab);
       },
       error: (err: any) => {
         this.loading = false;
@@ -321,7 +325,10 @@ export class ItineraryPage {
   }
 
   onRefresh(event: any) {
-    if (this.tripId) this.fetchTripData();
+    if (this.tripId) {
+      this.fetchTripData(true);
+      this.loadItinerary();
+    }
     event.target.complete();
   }
 
