@@ -27,8 +27,7 @@
     </div>
     <h2>Sin itinerario</h2>
     <p>Genera un plan de viaje personalizado con recomendaciones de restaurantes, hoteles y actividades.</p>
-    <ion-button class="btn-itinerary" (click)="generateItinerary()" [disabled]="generating">
-      <ion-icon name="sparkles-outline" slot="start"></ion-icon>
+    <ion-button class="btn-resolver" (click)="generateItinerary()" [disabled]="generating">
       {{ generating ? 'Creando…' : 'Crear itinerario' }}
     </ion-button>
   </div>
@@ -439,10 +438,20 @@
                     [class.wrong]="quizSubmitted && quizAnswers[i] === oi && oi !== q.correct_index"
                     [disabled]="quizSubmitted"
                     (click)="selectAnswer(i, oi)">
-              <span class="quiz__opt-letter">{{ ['A', 'B', 'C'][oi] }}</span>
+              <span class="quiz__opt-letter">
+                <ng-container *ngIf="!quizSubmitted || (!quizSubmitted && oi !== q.correct_index && quizAnswers[i] !== oi)">
+                  {{ ['A', 'B', 'C'][oi] }}
+                </ng-container>
+                <ion-icon *ngIf="quizSubmitted && oi === q.correct_index" name="checkmark-circle" class="quiz__opt-icon icon-correct"></ion-icon>
+                <ion-icon *ngIf="quizSubmitted && quizAnswers[i] === oi && oi !== q.correct_index" name="close-circle" class="quiz__opt-icon icon-wrong"></ion-icon>
+              </span>
               <span class="quiz__opt-text">{{ opt }}</span>
-              <span class="quiz__opt-tag" *ngIf="quizSubmitted && oi === q.correct_index">Correcta</span>
-              <span class="quiz__opt-tag wrong-tag" *ngIf="quizSubmitted && quizAnswers[i] === oi && oi !== q.correct_index">Tu respuesta</span>
+              <span class="quiz__opt-tag" *ngIf="quizSubmitted && oi === q.correct_index">
+                <ion-icon name="checkmark" class="tag-icon"></ion-icon> Correcta
+              </span>
+              <span class="quiz__opt-tag wrong-tag" *ngIf="quizSubmitted && quizAnswers[i] === oi && oi !== q.correct_index">
+                <ion-icon name="close" class="tag-icon"></ion-icon> Tu respuesta
+              </span>
             </button>
           </div>
         </div>

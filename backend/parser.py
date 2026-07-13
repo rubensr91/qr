@@ -242,13 +242,40 @@ def _parse_renfe(text):
 # inferimos el año minimizando el lapso entre vuelos consecutivos.
 # Ej: 31-Dic (DOY=365) + 3-Ene (DOY=3) → 2026 y 2027 (gap de 3 días).
 
+def _fix_years_in_flight_list(flights: list[dict]) -> None:
+    """Corrige años en una lista de vuelos ordenada, detectando cruce de año por DOY.
+
+    Recorre los vuelos en orden cronológico estimado y, cuando el DOY decrece
+    (ej: DOY=365 → DOY=3), incrementa el año base.
+    """
+    if len(flights) <= 1:
+        return
+
+    base_year = date.today().year
+    prev_doy = int(flights[0].get("doy", 0))
+
+    for p in flights:
+        doy = int(p.get("doy", 0))
+        if prev_doy > 180 and doy < prev_doy and doy < 180:
+            base_year += 1
+        try:
+            corrected = date(base_year, 1, 1) + timedelta(days=doy - 1)
+            p["flight_date"] = corrected.isoformat()
+        except (ValueError, TypeError):
+            pass
+        prev_doy = doy
+
+
 def infer_years(passes: list[dict]) -> None:
     """Infiere años para vuelos sin año explícito minimizando el lapso.
 
-    Agrupa por (pnr, kind), mantiene orden original de páginas,
-    detecta cruce de año cuando DOY decrece (ej: DOY=365 → DOY=3).
+    Primero agrupa por (pnr, kind) para detectar rollover intra-reserva.
+    Luego hace una pasada global con todos los vuelos sin año explícito
+    ordenados por fecha actual, para capturar rollover entre PNRs distintos
+    (ej: ida con PNR A y vuelta con PNR B).
     Modifica los pases in-place.
     """
+    # Pasada 1: intra-PNR (agrupados por localizador)
     groups: dict[tuple, list[dict]] = {}
     for p in passes:
         if p.get("has_explicit_year", True):
@@ -256,23 +283,18 @@ def infer_years(passes: list[dict]) -> None:
         key = (p.get("pnr"), p.get("kind"))
         groups.setdefault(key, []).append(p)
 
-    for key, group in groups.items():
-        if len(group) <= 1:
-            continue
+    for group in groups.values():
+        _fix_years_in_flight_list(group)
 
-        base_year = date.today().year
-        prev_doy = int(group[0].get("doy", 0))
-
-        for p in group:
-            doy = int(p.get("doy", 0))
-            if prev_doy > 180 and doy < prev_doy and doy < 180:
-                base_year += 1
-            try:
-                corrected = date(base_year, 1, 1) + timedelta(days=doy - 1)
-                p["flight_date"] = corrected.isoformat()
-            except (ValueError, TypeError):
-                pass
-            prev_doy = doy
+    # Pasada 2: cross-PNR — ordena todos los flights sin año explícito
+    # por su fecha actual (aunque esté mal) para capturar secuencias
+    # como DOY=365 (ida) → DOY=002 (vuelta, PNR distinto).
+    all_flights = [
+        p for p in passes
+        if p.get("kind") == "flight" and not p.get("has_explicit_year", True)
+    ]
+    all_flights.sort(key=lambda p: p.get("flight_date", ""))
+    _fix_years_in_flight_list(all_flights)
 
 
 # --- Dispatcher -------------------------------------------------------------

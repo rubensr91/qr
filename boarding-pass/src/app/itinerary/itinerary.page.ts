@@ -16,6 +16,7 @@ import {
   WeatherDay,
 } from '../services/itinerary.service';
 import { QuizQuestion, QuizService } from '../services/quiz.service';
+import { ContentValidator } from '../shared/services/content-validator.service';
 
 const SEGMENT_ICONS: Record<string, string> = {
   flight: 'airplane', train: 'train', hotel: 'bed',
@@ -87,6 +88,7 @@ export class ItineraryPage {
     private bpSvc: BoardingPassService,
     private toastCtrl: ToastController,
     private quizSvc: QuizService,
+    private validator: ContentValidator,
   ) {}
 
   ionViewWillEnter() {
@@ -152,10 +154,10 @@ export class ItineraryPage {
       next: (resp) => {
         this.itinerary = resp.itinerary;
         this.loading = false;
-        // Si hay itinerario, saltar al Plan automaticamente
         if (resp.itinerary?.daily_itinerary?.length) {
           this.activeTab = 'plan';
         }
+        this._checkItinerary();
       },
       error: (err: any) => {
         if (err?.status === 404) {
@@ -178,6 +180,7 @@ export class ItineraryPage {
         this.itinerary = resp.itinerary;
         this.generating = false;
         this.activeTab = 'plan';
+        this._checkItinerary();
       },
       error: (err: any) => {
         this.generating = false;
@@ -443,6 +446,7 @@ export class ItineraryPage {
         this.quizAnswers = this.quizQuestions.map(() => null);
         this.quizDestinations = resp.destinations || [];
         this.activeTab = 'quiz';
+        this._checkQuiz();
       },
       error: (err: any) => {
         this.quizLoading = false;
@@ -488,5 +492,33 @@ export class ItineraryPage {
   private async toast(msg: string, color: string) {
     const t = await this.toastCtrl.create({ message: msg, duration: 3000, color });
     await t.present();
+  }
+
+  /** Segundo check de contenido IA: consistencia, coherencia, alucinaciones, repeticiones. */
+  private _checkItinerary(): void {
+    const vr = this.validator.validateItinerary(this.itinerary);
+    if (!vr.isValid) {
+      console.warn('[ContentValidator] itinerary errors:', vr.errors);
+    }
+    const all = [...vr.errors, ...vr.warnings];
+    if (all.length) {
+      const summary = all.slice(0, 3).join('; ');
+      const tail = all.length > 3 ? ` (+${all.length - 3} más)` : '';
+      this.toast(`⚠️ ${summary}${tail}`, vr.isValid ? 'warning' : 'danger');
+    }
+  }
+
+  /** Segundo check de contenido IA para el cuestionario. */
+  private _checkQuiz(): void {
+    const vr = this.validator.validateQuiz(this.quizQuestions);
+    if (!vr.isValid) {
+      console.warn('[ContentValidator] quiz errors:', vr.errors);
+    }
+    const all = [...vr.errors, ...vr.warnings];
+    if (all.length) {
+      const summary = all.slice(0, 3).join('; ');
+      const tail = all.length > 3 ? ` (+${all.length - 3} más)` : '';
+      this.toast(`⚠️ ${summary}${tail}`, vr.isValid ? 'warning' : 'danger');
+    }
   }
 }

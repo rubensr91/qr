@@ -35,7 +35,6 @@ def _ocr_flight_time(image_path: str) -> dict[str, str | None]:
     try:
         import pytesseract
         from PIL import Image
-        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
     except Exception as e:
         print(f"[ocr] Error importando pytesseract: {e}", file=sys.stderr, flush=True)
         return {"flight_time": None, "gate_close_time": None}

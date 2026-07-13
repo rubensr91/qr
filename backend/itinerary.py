@@ -1708,6 +1708,71 @@ def _parse_expand_response(content: str, section: str) -> dict | list:
     return [] if section in ("restaurants", "hotels") else {}
 
 
+def _infer_origin_city_from_transport(passes: list[dict], segments: list[dict]) -> str:
+    flight_legs: list[tuple[date, str, str]] = []
+    for p in passes:
+        if p.get("kind") != "flight":
+            continue
+        from_city = _get_city_name(p.get("from", ""))
+        to_city = _get_city_name(p.get("to", ""))
+        flight_date = p.get("flight_date", "")
+        if not (from_city and to_city and flight_date):
+            continue
+        try:
+            flight_legs.append((date.fromisoformat(flight_date), from_city, to_city))
+        except (ValueError, TypeError):
+            continue
+
+    if len(flight_legs) >= 2:
+        flight_legs.sort(key=lambda leg: leg[0])
+        first_leg = flight_legs[0]
+        last_leg = flight_legs[-1]
+        same_year = first_leg[0].year == last_leg[0].year
+        long_gap = (last_leg[0] - first_leg[0]).days > 180
+        reversed_route = first_leg[1] == last_leg[2] and first_leg[2] == last_leg[1]
+        year_rollover_pattern = first_leg[0].month <= 2 and last_leg[0].month >= 11
+        if same_year and long_gap and reversed_route and year_rollover_pattern:
+            return last_leg[1]
+
+    transport_starts: list[tuple[str, str, str]] = []
+
+    for p in passes:
+        kind = p.get("kind")
+        if kind not in ("flight", "train"):
+            continue
+        from_city = _get_city_name(p.get("from", ""))
+        travel_date = p.get("flight_date", "")
+        travel_time = p.get("flight_time", "") or ""
+        if from_city and travel_date:
+            transport_starts.append((travel_date, travel_time, from_city))
+
+    for s in segments:
+        seg_type = s.get("type")
+        if seg_type not in ("flight", "train"):
+            continue
+        from_city = _get_city_name(s.get("from", ""))
+        travel_date = s.get("date", "")
+        travel_time = s.get("time", "") or ""
+        if from_city and travel_date:
+            transport_starts.append((travel_date, travel_time, from_city))
+
+    if transport_starts:
+        transport_starts.sort(key=lambda item: (item[0], item[1]))
+        return transport_starts[0][2]
+
+    flights = [p for p in passes if p.get("kind") == "flight"]
+    flights_sorted = _sort_by_date(flights)
+    if flights_sorted:
+        return _get_city_name(flights_sorted[0].get("from", ""))
+
+    trains = [p for p in passes if p.get("kind") == "train"]
+    trains_sorted = _sort_by_date(trains)
+    if trains_sorted:
+        return _get_city_name(trains_sorted[0].get("from", ""))
+
+    return ""
+
+
 async def generate_quiz(
     passes: list[dict],
     segments: list[dict] | None = None,
@@ -1716,10 +1781,10 @@ async def generate_quiz(
     if segments is None:
         segments = []
 
-    flights = [p for p in passes if p.get("kind") == "flight"]
-    flights_sorted = _sort_by_date(flights)
+    infer_years(passes)
 
-    origin_city = _get_city_name(flights_sorted[0].get("from", "")) if flights_sorted else ""
+    flights = [p for p in passes if p.get("kind") == "flight"]
+    origin_city = _infer_origin_city_from_transport(passes, segments)
     all_dates_set: set[str] = set()
     for p in passes:
         fd = p.get("flight_date")
@@ -1731,12 +1796,22 @@ async def generate_quiz(
             all_dates_set.add(fd)
 
     all_dates = sorted(all_dates_set) if all_dates_set else []
-    calendar = _build_daily_calendar(passes, segments, all_dates)
+    calendar = _build_daily_calendar(passes, segments, all_dates, origin_city=origin_city)
 
-    all_cities = list(dict.fromkeys(
-        d["city"] for d in calendar if d["city"]
-    ))
-    destinations = [c for c in all_cities if c != origin_city] or all_cities[:1]
+    all_cities = list(dict.fromkeys(d["city"] for d in calendar if d["city"]))
+    destinations = [c for c in all_cities if c and c != origin_city]
+
+    if not destinations:
+        seg_hotels = [s for s in segments if s.get("type") == "hotel"]
+        destinations = _real_flight_destinations(flights, seg_hotels, origin_city)
+
+    if not destinations:
+        trains = [p for p in passes if p.get("kind") == "train"]
+        for t in trains:
+            city = _get_city_name(t.get("to", ""))
+            if city and city != origin_city and city not in destinations:
+                destinations.append(city)
+
     if not destinations:
         return {"error": "No se pudieron determinar los destinos del viaje", "questions": []}
 

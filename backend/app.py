@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 BACKEND = Path(__file__).resolve().parent
 sys.path.insert(0, str(BACKEND))
+sys.path.insert(0, str(BACKEND.parent))
 
 from qr_client import extract_codes, extract_codes_from_image  # noqa: E402
 from itinerary import expand_section, generate_itinerary, generate_quiz, generate_trip_name  # noqa: E402

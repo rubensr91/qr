@@ -56,6 +56,7 @@ export interface MealSuggestions {
 export interface DailyPlan {
   day_number: number;
   date: string;
+  city?: string;
   theme: string;
   morning: DaySlot;
   afternoon: DaySlot;
