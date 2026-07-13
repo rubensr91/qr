@@ -56,6 +56,7 @@ export interface MealSuggestions {
 export interface DailyPlan {
   day_number: number;
   date: string;
+  city?: string;
   theme: string;
   morning: DaySlot;
   afternoon: DaySlot;
@@ -66,6 +67,7 @@ export interface DailyPlan {
 export interface ItineraryData {
   destination_overview?: string;
   weather_summary?: string;
+  _validation?: { is_valid: boolean; errors: string[]; warnings: string[] };
   weather: WeatherDay[];
   restaurants: Restaurant[];
   hotels: Hotel[];

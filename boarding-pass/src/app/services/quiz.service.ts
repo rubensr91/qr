@@ -13,6 +13,7 @@ export interface QuizResponse {
   questions: QuizQuestion[];
   destinations?: string[];
   error?: string;
+  _validation?: { is_valid: boolean; errors: string[]; warnings: string[] };
 }
 
 @Injectable({ providedIn: 'root' })

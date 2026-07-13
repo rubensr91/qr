@@ -225,10 +225,10 @@ export class ItineraryPage {
       next: (resp) => {
         this.itinerary = resp.itinerary;
         this.loading = false;
-        // Si hay itinerario, saltar al Plan automaticamente
         if (resp.itinerary?.daily_itinerary?.length) {
           this.activeTab = 'plan';
         }
+        this._showValidation(resp.itinerary?._validation);
       },
       error: (err: any) => {
         if (err?.status === 404) {
@@ -251,6 +251,7 @@ export class ItineraryPage {
         this.itinerary = resp.itinerary;
         this.generating = false;
         this.activeTab = 'plan';
+        this._showValidation(resp.itinerary?._validation);
       },
       error: (err: any) => {
         this.generating = false;
@@ -525,6 +526,7 @@ export class ItineraryPage {
         this.quizAnswers = this.quizQuestions.map(() => null);
         this.quizDestinations = resp.destinations || [];
         this.activeTab = 'quiz';
+        this._showValidation(resp._validation);
       },
       error: (err: any) => {
         this.quizLoading = false;
@@ -570,5 +572,14 @@ export class ItineraryPage {
   private async toast(msg: string, color: string) {
     const t = await this.toastCtrl.create({ message: msg, duration: 3000, color });
     await t.present();
+  }
+
+  private _showValidation(v?: { is_valid: boolean; errors: string[]; warnings: string[] }): void {
+    if (!v) return;
+    const all = [...(v.errors || []), ...(v.warnings || [])];
+    if (!all.length) return;
+    const summary = all.slice(0, 3).join('; ');
+    const tail = all.length > 3 ? ` (+${all.length - 3} más)` : '';
+    this.toast(`⚠️ ${summary}${tail}`, v.is_valid ? 'warning' : 'danger');
   }
 }

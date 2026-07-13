@@ -5,6 +5,7 @@ DeepSeek: recomendaciones personalizadas (restaurantes, hoteles, lugares, histor
 Open-Meteo: prediccion meteorologica gratuita sin API key.
 """
 
+import asyncio
 import json
 import sys
 from datetime import datetime, date
@@ -15,6 +16,7 @@ from openai import OpenAI
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from parser import infer_years
+from content_validator import validate_itinerary, validate_quiz
 
 # --- Configuracion ---
 
@@ -138,6 +140,95 @@ def _sort_by_date(items: list[dict], date_key: str = "flight_date", time_key: st
     return sorted(items, key=sort_key)
 
 
+def _parse_time_to_minutes(time_str: str | None) -> int | None:
+    """Convierte una hora HH:MM en minutos desde medianoche."""
+    if not time_str:
+        return None
+    try:
+        hh, mm = time_str.strip().split(":", 1)
+        hour = int(hh)
+        minute = int(mm)
+    except (ValueError, AttributeError):
+        return None
+    if 0 <= hour <= 23 and 0 <= minute <= 59:
+        return hour * 60 + minute
+    return None
+
+
+def _format_minutes_to_time(total_minutes: int | None) -> str:
+    """Convierte minutos a HH:MM y conserva el salto de día si existe."""
+    if total_minutes is None:
+        return ""
+    days, minutes = divmod(max(0, total_minutes), 24 * 60)
+    hours, mins = divmod(minutes, 60)
+    time_str = f"{hours:02d}:{mins:02d}"
+    return f"+{days}d {time_str}" if days else time_str
+
+
+def _resolve_coords_for_place(place: str) -> tuple[float, float] | None:
+    """Obtiene coordenadas desde codigo IATA o nombre de ciudad normalizado."""
+    if not place:
+        return None
+    coords = _get_coords(place)
+    if coords:
+        return coords
+    city = _get_city_name(place)
+    city_code = _get_city_code(city)
+    if city_code:
+        return _get_coords(city_code)
+    return None
+
+
+def _haversine_km(origin: tuple[float, float], destination: tuple[float, float]) -> float:
+    """Distancia aproximada entre dos puntos geograficos en kilometros."""
+    from math import asin, cos, radians, sin, sqrt
+
+    lat1, lon1 = origin
+    lat2, lon2 = destination
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+    return 2 * 6371.0 * asin(sqrt(a))
+
+
+def _estimate_transport_duration_minutes(kind: str, from_place: str, to_place: str) -> int:
+    """Estima el tiempo total hasta poder hacer actividades tras llegar."""
+    origin = _resolve_coords_for_place(from_place)
+    destination = _resolve_coords_for_place(to_place)
+
+    default_minutes = 150 if kind == "flight" else 120
+    if not origin or not destination:
+        return default_minutes
+
+    distance_km = _haversine_km(origin, destination)
+    if distance_km <= 0:
+        return default_minutes
+
+    if kind == "flight":
+        return max(90, int(round((distance_km / 700.0) * 60 + 75)))
+    return max(75, int(round((distance_km / 220.0) * 60 + 30)))
+
+
+def _build_transport_constraints_text(calendar: list[dict]) -> str:
+    """Serializa restricciones de llegada para que el LLM las trate como duras."""
+    lines: list[str] = []
+    for day in calendar:
+        constraints = day.get("transport_constraints") or []
+        if not constraints:
+            continue
+        lines.append(f"Día {day['day_number']} — {day['date']} — {day.get('city') or '?'}")
+        for item in constraints:
+            route = item.get("route") or "trayecto"
+            departure = item.get("departure_time") or "--"
+            arrival = item.get("estimated_arrival_time") or "--"
+            guard = item.get("no_activities_before") or "--"
+            lines.append(
+                f"  • {item.get('kind', 'transporte')} {route}: salida {departure}, "
+                f"llegada estimada {arrival}, no actividades antes de {guard}"
+            )
+    return "\n".join(lines) if lines else "No hay transportes con restricción horaria."
+
+
 def _get_city_name(code: str) -> str:
     """Convierte codigo de aeropuerto o nombre de estacion a ciudad.
 
@@ -162,6 +253,21 @@ def _get_city_name(code: str) -> str:
 def _get_coords(code: str) -> tuple[float, float] | None:
     """Obtiene coordenadas para un codigo de aeropuerto."""
     return CITY_COORDS.get(code.upper())
+
+
+# Ciudad -> codigo de aeropuerto (inverso de AIRPORT_CITY_NAMES), para poder
+# pedir clima de cualquier ciudad detectada en el calendario, no solo la
+# de origen del primer vuelo.
+_CITY_NAME_TO_CODE: dict[str, str] = {}
+for _code, _name in AIRPORT_CITY_NAMES.items():
+    _CITY_NAME_TO_CODE.setdefault(_name, _code)
+
+
+def _get_city_code(city_name: str) -> str | None:
+    """Convierte un nombre de ciudad ('Roma') a su codigo de aeropuerto ('FCO')."""
+    if not city_name:
+        return None
+    return _CITY_NAME_TO_CODE.get(city_name)
 
 
 # --- Clima (Open-Meteo, gratuito, sin API key) ---
@@ -213,6 +319,41 @@ async def fetch_weather(city_code: str, start_date: str, end_date: str) -> list[
             "wind_kmh": wind[i] if i < len(wind) else None,
         })
     return weather
+
+
+async def fetch_weather_for_calendar(calendar: list[dict]) -> list[dict]:
+    """Obtiene el clima real de CADA ciudad del calendario (no solo la primera).
+
+    Agrupa las fechas por ciudad, pide el clima de cada una en paralelo y
+    devuelve una lista con un elemento por fecha (con la ciudad a la que
+    corresponde), en el mismo orden que `calendar`.
+    """
+    city_dates: dict[str, list[str]] = {}
+    for day in calendar:
+        city = day.get("city")
+        if city:
+            city_dates.setdefault(city, []).append(day["date"])
+
+    cities = list(city_dates.keys())
+    codes = [_get_city_code(c) for c in cities]
+    tasks = [
+        fetch_weather(code, min(city_dates[city]), max(city_dates[city]))
+        if code and _get_coords(code) else _empty_weather()
+        for city, code in zip(cities, codes)
+    ]
+    results = await asyncio.gather(*tasks)
+
+    weather_by_date: dict[str, dict] = {}
+    for city, city_weather in zip(cities, results):
+        for w in city_weather:
+            weather_by_date[w["date"]] = {**w, "city": city}
+
+    return [weather_by_date[d["date"]] for d in calendar if d["date"] in weather_by_date]
+
+
+async def _empty_weather() -> list[dict]:
+    """Placeholder para ciudades sin coordenadas conocidas, mantiene la forma awaitable de las tareas paralelas."""
+    return []
 
 
 def _weather_emoji(code: int) -> str:
@@ -412,6 +553,10 @@ def _build_daily_calendar(
         flight_no = f.get("flight", "")
         from_city = _get_city_name(f.get("from", ""))
         to_city = _get_city_name(f.get("to", ""))
+        duration_min = _estimate_transport_duration_minutes("flight", f.get("from", ""), f.get("to", ""))
+        arrival_guard_min = _parse_time_to_minutes(flight_time)
+        if arrival_guard_min is not None:
+            arrival_guard_min += duration_min
         # Enriquecer descripcion con horas reales si existen
         time_extra = ""
         if flight_time:
@@ -420,8 +565,15 @@ def _build_daily_calendar(
             time_extra += f" — cierre puertas {gate_close}"
         days[fd]["events"].append({
             "type": "flight_arrival",
+            "transport_kind": "flight",
             "time": flight_time,
             "gate_close": gate_close,
+            "from_city": from_city,
+            "to_city": to_city,
+            "estimated_duration_min": duration_min,
+            "estimated_arrival_time": _format_minutes_to_time(arrival_guard_min),
+            "no_activities_before_minute": arrival_guard_min,
+            "no_activities_before": _format_minutes_to_time(arrival_guard_min),
             "description": f"Llegada {airline}{flight_no} desde {from_city}{time_extra}",
             "city": to_city,
         })
@@ -437,9 +589,20 @@ def _build_daily_calendar(
         to_raw = t.get("to", "")
         from_city = _get_city_name(from_raw) or from_raw
         to_city = _get_city_name(to_raw) or to_raw
+        duration_min = _estimate_transport_duration_minutes("train", from_raw, to_raw)
+        arrival_guard_min = _parse_time_to_minutes(time_str)
+        if arrival_guard_min is not None:
+            arrival_guard_min += duration_min
         days[fd]["events"].append({
             "type": "train_arrival",
+            "transport_kind": "train",
             "time": time_str,
+            "from_city": from_city,
+            "to_city": to_city,
+            "estimated_duration_min": duration_min,
+            "estimated_arrival_time": _format_minutes_to_time(arrival_guard_min),
+            "no_activities_before_minute": arrival_guard_min,
+            "no_activities_before": _format_minutes_to_time(arrival_guard_min),
             "description": f"Llegada tren {train_no} desde {from_city}",
             "city": to_city,
         })
@@ -455,9 +618,20 @@ def _build_daily_calendar(
         flight_no = s.get("flight_number", "")
         from_city = _get_city_name(s.get("from", "")) or s.get("from", "")
         to_city = _get_city_name(s.get("to_city", s.get("to", ""))) or s.get("to", "")
+        duration_min = _estimate_transport_duration_minutes("flight", s.get("from", ""), s.get("to_city", s.get("to", "")))
+        arrival_guard_min = _parse_time_to_minutes(s.get("time", "") or "")
+        if arrival_guard_min is not None:
+            arrival_guard_min += duration_min
         days[fd]["events"].append({
             "type": "flight_arrival",
+            "transport_kind": "flight",
             "time": s.get("time", "") or "",
+            "from_city": from_city,
+            "to_city": to_city,
+            "estimated_duration_min": duration_min,
+            "estimated_arrival_time": _format_minutes_to_time(arrival_guard_min),
+            "no_activities_before_minute": arrival_guard_min,
+            "no_activities_before": _format_minutes_to_time(arrival_guard_min),
             "description": f"Llegada {airline}{flight_no} desde {from_city}",
             "city": to_city,
         })
@@ -473,9 +647,20 @@ def _build_daily_calendar(
         train_no = s.get("train_number", "")
         from_city = _get_city_name(s.get("from", "")) or s.get("from", "")
         to_city = _get_city_name(s.get("to", "")) or s.get("to", "")
+        duration_min = _estimate_transport_duration_minutes("train", s.get("from", ""), s.get("to", ""))
+        arrival_guard_min = _parse_time_to_minutes(s.get("time", "") or "")
+        if arrival_guard_min is not None:
+            arrival_guard_min += duration_min
         days[fd]["events"].append({
             "type": "train_arrival",
+            "transport_kind": "train",
             "time": s.get("time", "") or "",
+            "from_city": from_city,
+            "to_city": to_city,
+            "estimated_duration_min": duration_min,
+            "estimated_arrival_time": _format_minutes_to_time(arrival_guard_min),
+            "no_activities_before_minute": arrival_guard_min,
+            "no_activities_before": _format_minutes_to_time(arrival_guard_min),
             "description": f"Llegada {op} {train_no} desde {from_city}",
             "city": to_city,
         })
@@ -551,16 +736,37 @@ def _build_daily_calendar(
             continue
         name = s.get("name", "")
         time_str = s.get("time", "") or ""
+        extra = s.get("description", "") or ""
+        label = f"Reserva: {name}" + (f" — {extra}" if extra else "")
         days[fd]["events"].append({
             "type": "activity",
             "time": time_str,
-            "description": f"Reserva: {name}",
+            "description": label,
             "city": _get_city_name(s.get("city", "")) or s.get("city", ""),
         })
 
     # Ordenar eventos por hora dentro de cada día
     for d in days.values():
         d["events"].sort(key=lambda e: e["time"] or "23:59")
+
+    for d in days.values():
+        transport_constraints = [
+            {
+                "kind": e.get("transport_kind", "transporte"),
+                "route": (
+                    f"{e.get('from_city', '')} → {e.get('to_city', '')}"
+                    if e.get("from_city") and e.get("to_city")
+                    else e.get("to_city") or e.get("from_city") or "trayecto"
+                ),
+                "departure_time": e.get("time") or "",
+                "estimated_arrival_time": e.get("estimated_arrival_time") or "",
+                "no_activities_before": e.get("no_activities_before") or "",
+                "no_activities_before_minute": e.get("no_activities_before_minute"),
+            }
+            for e in d["events"]
+            if e.get("type") in ("flight_arrival", "train_arrival") and e.get("no_activities_before")
+        ]
+        d["transport_constraints"] = transport_constraints
 
     # Calcular bloques libres aprovechando horas reales de vuelos/trenes
     for d in days.values():
@@ -585,6 +791,20 @@ def _build_daily_calendar(
             continue
 
         free_blocks = []
+        if d.get("transport_constraints"):
+            latest_guard_item = max(
+                d["transport_constraints"],
+                key=lambda c: c.get("no_activities_before_minute")
+                if isinstance(c.get("no_activities_before_minute"), int)
+                else -1,
+            )
+            latest_guard = latest_guard_item.get("no_activities_before") or ""
+            if latest_guard:
+                free_blocks.append({
+                    "start": None,
+                    "end": None,
+                    "label": f"No sugerir actividades antes de {latest_guard} (llegada estimada)",
+                })
         # Si sabemos que el primer evento es tarde (ej: vuelo llega a las 09:15),
         # ajustamos las franjas para que el LLM sepa que la mañana está ocupada
         # solo hasta cierta hora y el resto del día queda libre
@@ -628,6 +848,22 @@ def _build_daily_calendar(
 
 
 # --- DeepSeek LLM ---
+
+def _extract_travelers(passes: list[dict]) -> list[str]:
+    """Nombres unicos de pasajeros detectados en los billetes escaneados."""
+    return list(dict.fromkeys(
+        p.get("name", "").strip() for p in passes if p.get("name")
+    ))
+
+
+def _travelers_group_label(count: int) -> str:
+    """Etiqueta de composicion del grupo segun el nº de pasajeros detectados."""
+    if count <= 1:
+        return "viaje individual"
+    if count == 2:
+        return "pareja o dos acompañantes"
+    return f"grupo de {count} personas"
+
 
 def _build_itinerary_prompt(
     passes: list[dict],
@@ -679,13 +915,29 @@ def _build_itinerary_prompt(
 
     calendar_text = "\n".join(calendar_lines)
 
+    transport_constraints_text = _build_transport_constraints_text(calendar)
+
     # --- Clima ---
     weather_str = ""
     if weather:
         weather_str = "\n".join(
-            f"  {w['date']}: {w['condition']}, max {w['temp_max']}°C, min {w['temp_min']}°C"
-            for w in weather[:14]
+            f"  {w['date']} ({w.get('city', dest_str)}): {w['condition']}, "
+            f"{w['temp_min']}–{w['temp_max']}°C, precip {w.get('precipitation_mm') or 0}mm, "
+            f"viento {w.get('wind_kmh', '?')}km/h"
+            for w in weather[:num_days]
         )
+
+    # --- Viajeros ---
+    travelers = _extract_travelers(passes)
+    travelers_block = ""
+    if travelers:
+        n = len(travelers)
+        travelers_block = f"""
+=== VIAJEROS ===
+{n} pasajero(s) detectado(s): {", ".join(travelers)} — {_travelers_group_label(n)}.
+Ajusta el tamaño de las reservas sugeridas (mesas, habitaciones) y prioriza
+actividades y restaurantes aptos para este grupo.
+"""
 
     # --- Construir el prompt ---
     prompt = f"""Eres un agente de viajes experto. Genera un itinerario enriquecido a partir del calendario base que te proporciono.
@@ -698,7 +950,7 @@ Este es el nombre del viaje. El destino PRINCIPAL es {dest_str}.
 Destinos: {dest_str}
 Días totales: {num_days}
 Fechas: {all_dates[0]} → {all_dates[-1]}
-
+{travelers_block}
 === CALENDARIO BASE (extraído de tus reservas reales) ===
 Este es el esqueleto del viaje. Los eventos marcados como "fijos" son inamovibles
 (vuelos, trenes, hoteles, restaurantes y actividades ya reservados).
@@ -706,13 +958,16 @@ Tu tarea es RELLENAR LOS HUECOS LIBRES con sugerencias.
 
 {calendar_text}
 
-=== CLIMA PREVISTO ===
+=== RESTRICCIONES DE LLEGADA (OBLIGATORIAS) ===
+{transport_constraints_text}
+
+=== CLIMA PREVISTO (por ciudad y fecha reales) ===
 {weather_str or "No disponible — usa clima histórico de la época."}
 
 === TU TAREA ===
 A partir del calendario base, genera un JSON con:
 
-1. daily_itinerary [{num_days} elementos]: Para cada día, respeta los eventos fijos tal cual aparecen en el calendario base. En los bloques libres, sugiere actividades realistas para esa ciudad, clima y franja horaria. No inventes eventos que contradigan los fijos. La ciudad de cada día ya viene determinada en el calendario base — úsala.
+1. daily_itinerary [{num_days} elementos]: Para cada día, respeta los eventos fijos tal cual aparecen en el calendario base. En los bloques libres, sugiere actividades realistas para esa ciudad, EL CLIMA DE ESE DÍA CONCRETO y la franja horaria. No inventes eventos que contradigan los fijos. La ciudad de cada día ya viene determinada en el calendario base — úsala. Incluye "travel_reminders": array de recordatorios breves; obligatorio en días con vuelo/tren y vacío en el resto.
 2. hotels: Si NO hay hoteles reservados en el calendario base, sugiere 2-3 hoteles reales en {" cada una de las ciudades: " + dest_str if len(unique_destinations) > 1 else " " + dest_str}. Si YA hay hoteles, NO sugieras otros, solo referencia los existentes.
 3. restaurants: 3-4 restaurantes reales en {dest_str}. Si ya hay cenas reservadas, menciónalas en daily_itinerary y sugiere restaurantes para las comidas sin reserva.
 4. places_of_interest: 3-5 lugares reales en {dest_str}.
@@ -725,9 +980,16 @@ A partir del calendario base, genera un JSON con:
 - BREVEDAD: cada descripción ≤ 12 palabras. Tips ≤ 8 palabras.
 - daily_itinerary usa EXACTAMENTE las fechas del calendario base (no inventes otras).
 - Respeta check-in/check-out: el día de check-out NO sugieras actividades vinculadas a ese hotel.
-- Si un día es de desplazamiento (tren/vuelo), sugiere actividades ligeras o cercanas a la estación/aeropuerto.
+- Si un día tiene transporte, NO programes actividades antes de la hora indicada en "RESTRICCIONES DE LLEGADA".
+- Las restricciones de llegada son duras y tienen prioridad sobre los bloques libres.
+- Si un vuelo o tren llega tarde, deja vacíos morning y/o afternoon hasta la hora segura de llegada.
+- En cada día con vuelo o tren (ida o vuelta), añade 2-4 "travel_reminders" breves y accionables: antelación recomendada, posible hora punta y cómo llegar a aeropuerto/estación.
 - Si hay "cierre puertas" en un vuelo, sugiere salir hacia el aeropuerto al menos 45 min antes de esa hora.
-- Si la mañana está ocupada por un vuelo, NO sugieras actividades matutinas — empieza desde la tarde.
+- CLIMA: si ese día hay lluvia, tormenta o nieve, prioriza planes bajo techo (museos, mercados, gastronomía) sobre planes al aire libre; con buen tiempo, favorece miradores, parques o rutas a pie.
+- RITMO: no metas más de una visita "pesada" (museo grande, ruta larga) por franja horaria, y suaviza el día siguiente a un desplazamiento largo o llegada nocturna.
+- VARIEDAD: no repitas el mismo lugar, restaurante o tipo de actividad (p.ej. dos museos el mismo día) salvo que sea imprescindible.
+- COHERENCIA: los restaurantes y lugares sugeridos en daily_itinerary deben coincidir con los listados en "restaurants"/"places_of_interest" — no inventes nombres adicionales sueltos.
+- Si hay varios viajeros, prioriza actividades y reservas aptas para grupo (aforo, mesas, habitaciones).
 - Precios en €. Categorías: €, €€, €€€, €€€€.
 
 === FORMATO DE SALIDA ===
@@ -778,6 +1040,7 @@ Responde ÚNICAMENTE con el JSON. Sin markdown, sin explicaciones.
       "morning": {{ "activities": ["..."], "description": "≤12 palabras" }},
       "afternoon": {{ "activities": ["..."], "description": "≤12 palabras" }},
       "evening": {{ "activities": ["..."], "description": "≤12 palabras" }},
+      "travel_reminders": ["Recordatorio breve ≤10 palabras"],
       "meal_suggestions": {{ "lunch": "Restaurante o zona (≤8 palabras)", "dinner": "Restaurante o zona (≤8 palabras)" }}
     }}
   ],
@@ -978,12 +1241,25 @@ def _build_basic_itinerary(
             "morning": {"activities": [], "description": ""},
             "afternoon": {"activities": [], "description": ""},
             "evening": {"activities": [], "description": ""},
+            "travel_reminders": [],
             "meal_suggestions": {"lunch": "", "dinner": ""},
         }
         for ev in day["events"]:
             desc = ev["description"]
             if ev["type"] in ("flight_arrival", "train_arrival"):
                 entry["morning"]["activities"].append(desc)
+                kind = "aeropuerto" if ev["type"] == "flight_arrival" else "estación"
+                no_before = ev.get("no_activities_before")
+                if no_before:
+                    entry["travel_reminders"].append(
+                        f"Evita planes antes de {no_before} por traslado."
+                    )
+                entry["travel_reminders"].append(
+                    f"Sal con antelación extra hacia {kind} en hora punta."
+                )
+                entry["travel_reminders"].append(
+                    f"Prioriza tren/metro o taxi directo hacia {kind}."
+                )
             elif ev["type"] in ("restaurant",):
                 entry["evening"]["activities"].append(desc)
                 entry["meal_suggestions"]["dinner"] = desc.replace("Cena: ", "")
@@ -991,6 +1267,10 @@ def _build_basic_itinerary(
                 entry["afternoon"]["activities"].append(desc)
             else:
                 entry["morning"]["activities"].append(desc)
+
+        if entry["travel_reminders"]:
+            deduped = list(dict.fromkeys(entry["travel_reminders"]))
+            entry["travel_reminders"] = deduped[:4]
 
         if day["free_blocks"]:
             for fb in day["free_blocks"]:
@@ -1128,28 +1408,9 @@ async def generate_itinerary(
             "weather": weather,
         }
 
-    # 3. Obtener clima para el primer destino con coordenadas
-    weather = []
-    for src_list in (flights, seg_flights):
-        for item in src_list:
-            code = item.get("to", item.get("to_city", ""))
-            if code and _get_coords(code.upper()):
-                weather = await fetch_weather(code.upper(), all_dates[0], all_dates[-1])
-                break
-        if weather:
-            break
-
-    # Si no hay vuelos, usar primera ciudad de hotel
-    if not weather:
-        for h in seg_hotels:
-            city = h.get("city", "")
-            # Buscar coordenadas por nombre de ciudad
-            for code, name in AIRPORT_CITY_NAMES.items():
-                if name.lower() == city.lower() and _get_coords(code):
-                    weather = await fetch_weather(code, all_dates[0], all_dates[-1])
-                    break
-            if weather:
-                break
+    # 3. Obtener clima real de cada ciudad visitada (no solo la primera),
+    # usando el calendario ya calculado para el guardrail anterior.
+    weather = await fetch_weather_for_calendar(calendar_check)
 
     # 3. Generar recomendaciones con DeepSeek
     # Si no hay API key, devolvemos un itinerario basico (solo clima + estructura)
@@ -1221,6 +1482,10 @@ async def generate_itinerary(
     # Incluir estadisticas de tokens (app.py las extrae con pop)
     if session_id and response.usage:
         itinerary["_token_usage"] = token_stats
+
+    # Segundo check de contenido IA: coherencia, alucinaciones, repeticiones
+    validation = validate_itinerary(itinerary)
+    itinerary["_validation"] = validation
 
     return itinerary
 
@@ -1448,6 +1713,71 @@ def _parse_expand_response(content: str, section: str) -> dict | list:
     return [] if section in ("restaurants", "hotels") else {}
 
 
+def _infer_origin_city_from_transport(passes: list[dict], segments: list[dict]) -> str:
+    flight_legs: list[tuple[date, str, str]] = []
+    for p in passes:
+        if p.get("kind") != "flight":
+            continue
+        from_city = _get_city_name(p.get("from", ""))
+        to_city = _get_city_name(p.get("to", ""))
+        flight_date = p.get("flight_date", "")
+        if not (from_city and to_city and flight_date):
+            continue
+        try:
+            flight_legs.append((date.fromisoformat(flight_date), from_city, to_city))
+        except (ValueError, TypeError):
+            continue
+
+    if len(flight_legs) >= 2:
+        flight_legs.sort(key=lambda leg: leg[0])
+        first_leg = flight_legs[0]
+        last_leg = flight_legs[-1]
+        same_year = first_leg[0].year == last_leg[0].year
+        long_gap = (last_leg[0] - first_leg[0]).days > 180
+        reversed_route = first_leg[1] == last_leg[2] and first_leg[2] == last_leg[1]
+        year_rollover_pattern = first_leg[0].month <= 2 and last_leg[0].month >= 11
+        if same_year and long_gap and reversed_route and year_rollover_pattern:
+            return last_leg[1]
+
+    transport_starts: list[tuple[str, str, str]] = []
+
+    for p in passes:
+        kind = p.get("kind")
+        if kind not in ("flight", "train"):
+            continue
+        from_city = _get_city_name(p.get("from", ""))
+        travel_date = p.get("flight_date", "")
+        travel_time = p.get("flight_time", "") or ""
+        if from_city and travel_date:
+            transport_starts.append((travel_date, travel_time, from_city))
+
+    for s in segments:
+        seg_type = s.get("type")
+        if seg_type not in ("flight", "train"):
+            continue
+        from_city = _get_city_name(s.get("from", ""))
+        travel_date = s.get("date", "")
+        travel_time = s.get("time", "") or ""
+        if from_city and travel_date:
+            transport_starts.append((travel_date, travel_time, from_city))
+
+    if transport_starts:
+        transport_starts.sort(key=lambda item: (item[0], item[1]))
+        return transport_starts[0][2]
+
+    flights = [p for p in passes if p.get("kind") == "flight"]
+    flights_sorted = _sort_by_date(flights)
+    if flights_sorted:
+        return _get_city_name(flights_sorted[0].get("from", ""))
+
+    trains = [p for p in passes if p.get("kind") == "train"]
+    trains_sorted = _sort_by_date(trains)
+    if trains_sorted:
+        return _get_city_name(trains_sorted[0].get("from", ""))
+
+    return ""
+
+
 async def generate_quiz(
     passes: list[dict],
     segments: list[dict] | None = None,
@@ -1456,10 +1786,10 @@ async def generate_quiz(
     if segments is None:
         segments = []
 
-    flights = [p for p in passes if p.get("kind") == "flight"]
-    flights_sorted = _sort_by_date(flights)
+    infer_years(passes)
 
-    origin_city = _get_city_name(flights_sorted[0].get("from", "")) if flights_sorted else ""
+    flights = [p for p in passes if p.get("kind") == "flight"]
+    origin_city = _infer_origin_city_from_transport(passes, segments)
     all_dates_set: set[str] = set()
     for p in passes:
         fd = p.get("flight_date")
@@ -1471,12 +1801,22 @@ async def generate_quiz(
             all_dates_set.add(fd)
 
     all_dates = sorted(all_dates_set) if all_dates_set else []
-    calendar = _build_daily_calendar(passes, segments, all_dates)
+    calendar = _build_daily_calendar(passes, segments, all_dates, origin_city=origin_city)
 
-    all_cities = list(dict.fromkeys(
-        d["city"] for d in calendar if d["city"]
-    ))
-    destinations = [c for c in all_cities if c != origin_city] or all_cities[:1]
+    all_cities = list(dict.fromkeys(d["city"] for d in calendar if d["city"]))
+    destinations = [c for c in all_cities if c and c != origin_city]
+
+    if not destinations:
+        seg_hotels = [s for s in segments if s.get("type") == "hotel"]
+        destinations = _real_flight_destinations(flights, seg_hotels, origin_city)
+
+    if not destinations:
+        trains = [p for p in passes if p.get("kind") == "train"]
+        for t in trains:
+            city = _get_city_name(t.get("to", ""))
+            if city and city != origin_city and city not in destinations:
+                destinations.append(city)
+
     if not destinations:
         return {"error": "No se pudieron determinar los destinos del viaje", "questions": []}
 
@@ -1549,7 +1889,11 @@ Responde UNICAMENTE con el JSON. Sin markdown, sin explicaciones.
 
     validated = _validate_quiz_questions(questions)
     _shuffle_quiz_options(validated)
-    return {"questions": validated, "destinations": destinations}
+
+    # Segundo check de contenido IA para el cuestionario
+    quiz_validation = validate_quiz(validated)
+
+    return {"questions": validated, "destinations": destinations, "_validation": quiz_validation}
 
 
 def _shuffle_quiz_options(questions: list[dict]):
