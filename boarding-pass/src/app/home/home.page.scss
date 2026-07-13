@@ -10,6 +10,37 @@
   align-items: center;
   min-height: 100%;
   justify-content: center;
+
+  &__emblem {
+    position: relative;
+    width: 88px;
+    height: 88px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--space-5);
+  }
+
+  &__emblem-icon {
+    font-size: 2.25rem;
+    color: var(--teal);
+    position: relative;
+    z-index: 1;
+    transform: rotate(-8deg);
+  }
+
+  &__emblem-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--teal-soft);
+    animation: emblemPulse 3s ease-in-out infinite;
+  }
+}
+
+@keyframes emblemPulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.08); opacity: 1; }
 }
 
 .hero__strip {
@@ -64,6 +95,12 @@
     height: 1px;
     background: var(--paper-line);
   }
+}
+
+:host .proc-card__cancel {
+  margin-top: var(--space-4);
+  --color: var(--navy-muted);
+  font-size: var(--fs-small);
 }
 
 ion-button[fill="clear"] .mono {

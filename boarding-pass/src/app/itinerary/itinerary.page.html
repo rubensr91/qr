@@ -10,6 +10,10 @@
 </ion-header>
 
 <ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
   <!-- Loading -->
   <div *ngIf="loading" class="state-container">
     <ion-spinner name="dots"></ion-spinner>
@@ -18,9 +22,13 @@
 
   <!-- No itinerary yet -->
   <div *ngIf="!loading && !itinerary && !error" class="state-container">
+    <div class="empty-state__icon">
+      <ion-icon name="compass-outline"></ion-icon>
+    </div>
     <h2>Sin itinerario</h2>
-    <p>Genera un plan de viaje personalizado</p>
+    <p>Genera un plan de viaje personalizado con recomendaciones de restaurantes, hoteles y actividades.</p>
     <ion-button class="btn-itinerary" (click)="generateItinerary()" [disabled]="generating">
+      <ion-icon name="sparkles-outline" slot="start"></ion-icon>
       {{ generating ? 'Creando…' : 'Crear itinerario' }}
     </ion-button>
   </div>
@@ -30,7 +38,13 @@
     <ion-icon name="warning-outline" size="large" color="danger"></ion-icon>
     <h2>Error</h2>
     <p>{{ error }}</p>
-    <ion-button (click)="goBack()" fill="outline">Volver</ion-button>
+    <div class="error-actions">
+      <ion-button (click)="retryLoad()" fill="outline">
+        <ion-icon name="refresh-outline" slot="start"></ion-icon>
+        Reintentar
+      </ion-button>
+      <ion-button (click)="goBack()" fill="clear" color="medium">Volver</ion-button>
+    </div>
   </div>
 
   <!-- Itinerary content -->

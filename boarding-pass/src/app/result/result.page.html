@@ -10,6 +10,9 @@
       <ion-button (click)="saveTrip()" [disabled]="saved || saving" fill="clear">
         <ion-icon [name]="saved ? 'checkmark-circle' : 'bookmark-outline'" slot="icon-only"></ion-icon>
       </ion-button>
+      <ion-button *ngIf="saved" (click)="goToItinerary()" fill="clear" color="primary">
+        <ion-icon name="calendar-outline" slot="icon-only"></ion-icon>
+      </ion-button>
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
@@ -45,6 +48,7 @@
                  *ngFor="let pass of grp.passes; let j = index"
                  [class.bp-train]="pass.kind === 'train'"
                  [class.bp-flight]="pass.kind === 'flight' || !pass.kind">
+          <div *ngIf="justCreated && j === 0" class="bp-new-badge">NUEVO</div>
 
           <div class="bp-perforation"></div>
 
@@ -163,6 +167,13 @@
           <p *ngIf="pass.sourceFile" class="bp-source mono">origen: {{ pass.sourceFile }}</p>
         </article>
       </div>
+    </div>
+
+    <div class="result-actions" *ngIf="saved && savedTripId">
+      <ion-button expand="block" class="primary-cta" (click)="goToItinerary()">
+        <ion-icon name="calendar-outline" slot="start"></ion-icon>
+        Ver itinerario
+      </ion-button>
     </div>
   </div>
 </ion-content>

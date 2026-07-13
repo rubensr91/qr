@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { ToastController } from '@ionic/angular';
 import { BarcodeImage, BoardingPassService, Pass } from '../services/boarding-pass.service';
 
@@ -23,6 +24,7 @@ export class ResultPage {
   saved = false;
   saving = false;
   savedTripId = 0;
+  justCreated = false;
 
   constructor(
     private router: Router,
@@ -100,9 +102,11 @@ export class ResultPage {
         console.debug('[ResultPage] saveTrip response:', resp.status);
         if (resp.status !== 'duplicate') {
           this.savedTripId = resp.id;
+          this.justCreated = true;
         }
         this.saved = resp.status !== 'duplicate';
         this.saving = false;
+        try { Haptics.impact({ style: ImpactStyle.Medium }); } catch {}
         if (resp.status === 'duplicate') {
           this.toast('Este viaje ya estaba guardado, sin cambios', 'warning');
         } else if (resp.status === 'updated') {

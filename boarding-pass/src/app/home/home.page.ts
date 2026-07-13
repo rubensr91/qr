@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { ToastController } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import { BoardingPassService, Pass } from '../services/boarding-pass.service';
@@ -14,12 +15,19 @@ import { BoardingPassService, Pass } from '../services/boarding-pass.service';
 export class HomePage {
   busy = false;
   progress = '';
+  private cancelled = false;
 
   constructor(
     private svc: BoardingPassService,
     private router: Router,
     private toastCtrl: ToastController,
   ) {}
+
+  cancel() {
+    this.cancelled = true;
+    this.busy = false;
+    this.progress = '';
+  }
 
   async pickAndUpload() {
     let picked: any[] = [];
@@ -47,6 +55,7 @@ export class HomePage {
     const errorMessages: string[] = [];
 
     for (let i = 0; i < picked.length; i++) {
+      if (this.cancelled) break;
       const file = picked[i];
       const filename = file.name || `pdf_${i + 1}.pdf`;
       this.progress = `${i + 1}/${picked.length}`;
@@ -68,6 +77,13 @@ export class HomePage {
         errorMessages.push(filename + ': ' + msg);
         console.error('Error ' + filename + ':', msg, e);
       }
+      if (this.cancelled) break;
+    }
+    if (this.cancelled) {
+      this.cancelled = false;
+      this.busy = false;
+      this.progress = '';
+      return;
     }
 
     this.busy = false;
@@ -89,9 +105,9 @@ export class HomePage {
 
     const combinedName = filenames.join(' + ') || 'varios.pdf';
 
-    // Guardar viaje y navegar directo a /trips
     try {
       await firstValueFrom(this.svc.saveTrip(combinedName, allPasses, allImages));
+      try { await Haptics.impact({ style: ImpactStyle.Medium }); } catch {}
     } catch (e: any) {
       console.error('Error guardando viaje:', e);
     }

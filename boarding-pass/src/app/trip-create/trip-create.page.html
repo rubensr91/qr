@@ -120,6 +120,9 @@
               <ion-icon name="add" slot="start"></ion-icon>
               Añadir {{ st.label }}
             </ion-button>
+            <ion-text color="danger" class="seg-form__error" *ngIf="formErrors[st.type]">
+              {{ formErrors[st.type] }}
+            </ion-text>
           </div>
         </ion-accordion>
       </ion-accordion-group>

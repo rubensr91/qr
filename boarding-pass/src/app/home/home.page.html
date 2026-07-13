@@ -1,12 +1,16 @@
 <ion-header class="glass" [translucent]="true">
   <ion-toolbar>
     <ion-title></ion-title>
-
   </ion-toolbar>
 </ion-header>
 
 <ion-content [fullscreen]="true">
   <div class="hero page-enter">
+    <div class="hero__emblem page-enter-0">
+      <ion-icon name="airplane-outline" class="hero__emblem-icon"></ion-icon>
+      <div class="hero__emblem-ring"></div>
+    </div>
+
     <h1 class="hero__title">Tu próximo<br><em>viaje</em> empieza aquí</h1>
     <p class="hero__sub">Sube tus tarjetas de embarque o billetes y organiza tu viaje al instante.</p>
 
@@ -29,5 +33,8 @@
     <p class="proc-card__title">Procesando tarjetas de embarque</p>
     <p class="proc-card__count" *ngIf="progress">{{ progress }}</p>
     <ion-progress-bar *ngIf="progress" [value]="0.5" color="primary" class="proc-card__bar"></ion-progress-bar>
+    <ion-button fill="clear" size="small" color="medium" class="proc-card__cancel" (click)="cancel()">
+      Cancelar
+    </ion-button>
   </div>
 </div>

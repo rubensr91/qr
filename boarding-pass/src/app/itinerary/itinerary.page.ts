@@ -315,6 +315,21 @@ export class ItineraryPage {
     history.back();
   }
 
+  onRefresh(event: any) {
+    if (this.tripId) this.fetchTripData();
+    event.target.complete();
+  }
+
+  retryLoad() {
+    if (this.tripId) {
+      this.error = '';
+      this.loading = true;
+      this.fetchTripData();
+    } else {
+      this.goBack();
+    }
+  }
+
   editSegments() {
     this.router.navigate(['/trip-create'], {
       state: { editTripId: this.tripId, tripName: this.tripName, segments: this.segments },
