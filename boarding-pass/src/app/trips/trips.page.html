@@ -6,16 +6,26 @@
       </ion-button>
     </ion-buttons>
     <ion-title class="mono">viajes</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="pickAndUpload()" [disabled]="busy" fill="clear">
+        <ion-icon name="cloud-upload-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
 <ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
   <!-- Loading skeleton -->
   <div *ngIf="loading" class="trip-list">
     <div class="trip-card pass-stub" *ngFor="let i of [1,2,3]">
-      <div class="skeleton skeleton-line"></div>
-      <div class="skeleton skeleton-line short"></div>
-      <div class="skeleton skeleton-line"></div>
+      <div class="skeleton skeleton-line w-full"></div>
+      <div class="skeleton skeleton-line w-60"></div>
+      <div class="skeleton skeleton-line w-80"></div>
+      <div class="skeleton skeleton-line w-40"></div>
     </div>
   </div>
 
@@ -38,7 +48,6 @@
          [style.animation-delay.ms]="i * 50"
          (click)="viewTrip(trip)">
 
-      <!-- Header: destination + date -->
       <div class="trip-card__head">
         <div class="trip-card__title-block">
           <span class="board-code board-code--md">{{ getOriginCode(trip) }}</span>
@@ -48,9 +57,9 @@
           <span class="board-code board-code--md">{{ getDestCode(trip) }}</span>
         </div>
         <h3 class="trip-card__name">{{ trip.trip_name || trip.filename }}</h3>
+        <span class="trip-card__date" *ngIf="tripDateRange(trip) as dr">{{ dr }}</span>
       </div>
 
-      <!-- Pass summary chips -->
       <div class="trip-card__chips">
         <span class="chip" *ngFor="let pass of trip.pass_data.passes.slice(0, 3)">
           <ion-icon [name]="pass.kind === 'train' ? 'train-outline' : 'airplane-outline'"></ion-icon>
@@ -65,7 +74,6 @@
         </span>
       </div>
 
-      <!-- Actions -->
       <div class="trip-card__actions">
         <ion-button fill="clear" size="small" (click)="goToItinerary(trip); $event.stopPropagation()">
           <span>Itinerario</span>
@@ -81,12 +89,14 @@
   </div>
 </ion-content>
 
-<!-- Processing overlay -->
 <div class="proc-overlay" *ngIf="busy">
   <div class="proc-card">
     <ion-spinner name="dots" color="primary"></ion-spinner>
     <p class="proc-card__title">Procesando tarjetas de embarque</p>
     <p class="proc-card__count" *ngIf="progress">{{ progress }}</p>
     <ion-progress-bar *ngIf="progress" [value]="0.5" color="primary" class="proc-card__bar"></ion-progress-bar>
+    <ion-button fill="clear" size="small" color="medium" class="proc-card__cancel" (click)="cancel()">
+      Cancelar
+    </ion-button>
   </div>
 </div>

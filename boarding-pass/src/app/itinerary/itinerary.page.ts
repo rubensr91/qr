@@ -1,10 +1,12 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { ToastController } from '@ionic/angular';
 import { ScreenBrightness } from '@capacitor-community/screen-brightness';
 import { BarcodeImage, BoardingPassService, Pass, TravelSegment } from '../services/boarding-pass.service';
 import {
   DailyPlan,
+  ExpandResponse,
   HistoricalSite,
   Hotel,
   ItineraryData,
@@ -13,6 +15,7 @@ import {
   Restaurant,
   WeatherDay,
 } from '../services/itinerary.service';
+import { QuizQuestion, QuizService } from '../services/quiz.service';
 
 const SEGMENT_ICONS: Record<string, string> = {
   flight: 'airplane', train: 'train', hotel: 'bed',
@@ -134,16 +137,29 @@ export class ItineraryPage {
   loading = true;
   generating = false;
   error = '';
-  activeTab: 'plan' | 'cards' | 'bookings' | 'eat' | 'sleep' | 'visit' | 'tips' = 'plan';
+  activeTab: 'plan' | 'cards' | 'bookings' | 'eat' | 'sleep' | 'visit' | 'tips' | 'quiz' = 'plan';
 
   enlargedBarcode: BarcodeImage | null = null;
   private previousBrightness: number | undefined;
+
+  expanding: Record<string, boolean> = {};
+  expandErrors: Record<string, string> = {};
+
+  // Quiz state
+  quizQuestions: QuizQuestion[] = [];
+  quizAnswers: (number | null)[] = [];
+  quizSubmitted = false;
+  quizScore = 0;
+  quizLoading = false;
+  quizError = '';
+  quizDestinations: string[] = [];
 
   constructor(
     private router: Router,
     private itinerarySvc: ItineraryService,
     private bpSvc: BoardingPassService,
     private toastCtrl: ToastController,
+    private quizSvc: QuizService,
   ) {}
 
   ionViewWillEnter() {
@@ -169,12 +185,16 @@ export class ItineraryPage {
     }
   }
 
-  private afterLoad() {
-    this.activeTab = 'cards';
-    this.loadItinerary();
+  private afterLoad(preserveTab = false) {
+    if (!preserveTab) {
+      this.activeTab = 'cards';
+      this.loadItinerary();
+    } else {
+      this.loading = false;
+    }
   }
 
-  private fetchTripData() {
+  private fetchTripData(preserveTab = false) {
     this.loading = true;
     this.bpSvc.getTrips().subscribe({
       next: (resp: any) => {
@@ -187,7 +207,7 @@ export class ItineraryPage {
           this.tripName = trip.trip_name || trip.filename;
         }
         this.loading = false;
-        this.afterLoad();
+        this.afterLoad(preserveTab);
       },
       error: (err: any) => {
         this.loading = false;
@@ -397,10 +417,154 @@ export class ItineraryPage {
     history.back();
   }
 
+  onRefresh(event: any) {
+    if (this.tripId) {
+      this.fetchTripData(true);
+      this.loadItinerary();
+    }
+    event.target.complete();
+  }
+
+  retryLoad() {
+    if (this.tripId) {
+      this.error = '';
+      this.loading = true;
+      this.fetchTripData();
+    } else {
+      this.goBack();
+    }
+  }
+
   editSegments() {
     this.router.navigate(['/trip-create'], {
       state: { editTripId: this.tripId, tripName: this.tripName, segments: this.segments },
     });
+  }
+
+  expandSection(section: string) {
+    if (this.expanding[section]) return;
+
+    this.expanding[section] = true;
+    this.expandErrors[section] = '';
+    const sid = this.bpSvc.getSessionId();
+
+    this.itinerarySvc.expandSection(this.tripId, section, sid).subscribe({
+      next: (resp: ExpandResponse) => {
+        this.expanding[section] = false;
+        if (resp.error) {
+          this.expandErrors[section] = resp.error;
+          this.toast(resp.error, 'danger');
+          return;
+        }
+        const count = this.countExpandedItems(section, resp);
+        if (!count) {
+          this.toast('No se encontraron más sugerencias', 'warning');
+          return;
+        }
+        this.appendExpandResult(section, resp);
+        this.toast(`${count} sugerencias añadidas`, 'success');
+        try { Haptics.impact({ style: ImpactStyle.Medium }); } catch {}
+      },
+      error: (err: any) => {
+        this.expanding[section] = false;
+        const msg = err?.error?.detail?.error || err?.error?.detail || err?.message || 'Error';
+        this.expandErrors[section] = msg;
+        this.toast('Error: ' + msg, 'danger');
+      },
+    });
+  }
+
+  private countExpandedItems(section: string, resp: ExpandResponse): number {
+    switch (section) {
+      case 'restaurants': return (resp.items || []).length;
+      case 'hotels': return (resp.items || []).length;
+      case 'visit': return (resp.places_of_interest || []).length + (resp.historical_sites || []).length;
+      case 'tips': return (resp.transport_tips || []).length + (resp.general_tips || []).length + (resp.cultural_notes || []).length;
+      default: return 0;
+    }
+  }
+
+  private appendExpandResult(section: string, resp: ExpandResponse) {
+    if (!this.itinerary) return;
+    switch (section) {
+      case 'restaurants':
+        this.itinerary.restaurants = [...(this.itinerary.restaurants || []), ...(resp.items || [])];
+        break;
+      case 'hotels':
+        this.itinerary.hotels = [...(this.itinerary.hotels || []), ...(resp.items || [])];
+        break;
+      case 'visit':
+        this.itinerary.places_of_interest = [...(this.itinerary.places_of_interest || []), ...(resp.places_of_interest || [])];
+        this.itinerary.historical_sites = [...(this.itinerary.historical_sites || []), ...(resp.historical_sites || [])];
+        break;
+      case 'tips':
+        this.itinerary.transport_tips = [...(this.itinerary.transport_tips || []), ...(resp.transport_tips || [])];
+        this.itinerary.general_tips = [...(this.itinerary.general_tips || []), ...(resp.general_tips || [])];
+        this.itinerary.cultural_notes = [...(this.itinerary.cultural_notes || []), ...(resp.cultural_notes || [])];
+        break;
+    }
+    this.itinerary = { ...this.itinerary };
+  }
+
+  generateQuiz() {
+    this.quizLoading = true;
+    this.quizError = '';
+    this.quizQuestions = [];
+    this.quizSubmitted = false;
+    const sid = this.bpSvc.getSessionId();
+
+    this.quizSvc.generate(this.tripId, sid).subscribe({
+      next: (resp) => {
+        this.quizLoading = false;
+        if (resp.error) {
+          this.quizError = resp.error;
+          this.toast(resp.error, 'danger');
+          return;
+        }
+        this.quizQuestions = resp.questions || [];
+        this.quizAnswers = this.quizQuestions.map(() => null);
+        this.quizDestinations = resp.destinations || [];
+        this.activeTab = 'quiz';
+      },
+      error: (err: any) => {
+        this.quizLoading = false;
+        const msg = err?.error?.detail?.error || err?.error?.detail || err?.message || 'Error al generar quiz';
+        this.quizError = msg;
+        this.toast('Error: ' + msg, 'danger');
+      },
+    });
+  }
+
+  selectAnswer(index: number, optionIndex: number) {
+    if (this.quizSubmitted) return;
+    this.quizAnswers[index] = optionIndex;
+  }
+
+  quizIncomplete(): boolean {
+    return this.quizAnswers.some(a => a === null);
+  }
+
+  quizAnsweredCount(): number {
+    return this.quizAnswers.filter(a => a !== null).length;
+  }
+
+  submitQuiz() {
+    let correct = 0;
+    for (let i = 0; i < this.quizQuestions.length; i++) {
+      if (this.quizAnswers[i] === this.quizQuestions[i].correct_index) {
+        correct++;
+      }
+    }
+    this.quizScore = correct;
+    this.quizSubmitted = true;
+  }
+
+  resetQuiz() {
+    this.quizQuestions = [];
+    this.quizAnswers = [];
+    this.quizSubmitted = false;
+    this.quizScore = 0;
+    this.quizError = '';
   }
 
   private async toast(msg: string, color: string) {

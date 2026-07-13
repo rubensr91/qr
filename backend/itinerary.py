@@ -6,12 +6,15 @@ Open-Meteo: prediccion meteorologica gratuita sin API key.
 """
 
 import json
+import sys
 from datetime import datetime, date
+from pathlib import Path
 
 import httpx
 from openai import OpenAI
 
-from .parser import infer_years
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from parser import infer_years
 
 # --- Configuracion ---
 
@@ -1180,7 +1183,7 @@ async def generate_itinerary(
 
         # Registrar consumo real de tokens de la API
         if session_id and response.usage:
-            from .token_tracker import record_usage
+            from token_tracker import record_usage
             token_stats = record_usage(
                 session_id,
                 response.usage.prompt_tokens,
@@ -1220,3 +1223,387 @@ async def generate_itinerary(
         itinerary["_token_usage"] = token_stats
 
     return itinerary
+
+
+def _serialize_for_prompt(items: list[dict], keys: list[str]) -> str:
+    """Serializa items para incluir en el prompt."""
+    lines = []
+    for i, item in enumerate(items, 1):
+        parts = [f"{i}. "]
+        for k in keys:
+            val = item.get(k)
+            if val:
+                if isinstance(val, list):
+                    parts.append(f"{k}: {', '.join(val)}")
+                else:
+                    parts.append(f"{k}: {val}")
+        lines.append(" | ".join(parts))
+    return "\n".join(lines) if lines else "(ninguno)"
+
+
+def expand_section(
+    passes: list[dict],
+    segments: list[dict],
+    existing_itinerary: dict,
+    section: str,
+    session_id: str | None = None,
+) -> dict:
+    """Genera mas recomendaciones de una seccion concreta del itinerario.
+
+    Returns dict with either:
+      - {"items": [...], "section": str}
+      - {"error": str}
+      - For "visit": {"places_of_interest": [...], "historical_sites": [...], "section": "visit"}
+      - For "tips": {"transport_tips": [...], "general_tips": [...], "cultural_notes": [...], "section": "tips"}
+    """
+    from datetime import timedelta
+
+    if segments is None:
+        segments = []
+
+    flights = [p for p in passes if p.get("kind") == "flight"]
+    flights_sorted = _sort_by_date(flights)
+    origin_city = _get_city_name(flights_sorted[0].get("from", "")) if flights_sorted else None
+
+    all_dates_set = set()
+    for p in passes:
+        fd = p.get("flight_date")
+        if fd:
+            all_dates_set.add(fd)
+    for s in segments:
+        fd = s.get("date") or s.get("check_in")
+        if fd:
+            all_dates_set.add(fd)
+
+    all_dates = sorted(all_dates_set)
+    dates_str = ", ".join(all_dates) if all_dates else "fechas no especificadas"
+
+    all_cities = list(dict.fromkeys(
+        d.get("city") for d in _build_daily_calendar(passes, segments, all_dates)
+        if d.get("city")
+    ))
+    cities = [c for c in all_cities if c != origin_city] or all_cities[:1]
+    dest_str = ", ".join(cities) if cities else "destino desconocido"
+
+    passenger_names = list(dict.fromkeys(
+        p.get("name", "") for p in passes if p.get("name")
+    ))
+    passengers_str = ", ".join(passenger_names) if passenger_names else "no especificado"
+
+    overview = existing_itinerary.get("destination_overview", "")
+    weather = existing_itinerary.get("weather", [])
+    weather_str = ""
+    if weather:
+        weather_str = "\n".join(
+            f"  {w['date']}: {w['condition']}, max {w['temp_max']}°C, min {w['temp_min']}°C"
+            for w in weather[:7]
+        )
+
+    passes_str = ""
+    for p in passes:
+        route = f"{p.get('from', '?')} → {p.get('to', '?')}"
+        d = p.get("flight_date", "")
+        t = p.get("flight_time", "")
+        carrier = p.get("train") or f"{p.get('airline', '')}{p.get('flight', '')}"
+        passes_str += f"  - {route} | {d} {t} | {carrier} | {p.get('kind', 'flight')}\n"
+
+    seg_str = ""
+    for s in segments:
+        stype = s.get("type", "")
+        if stype == "flight":
+            seg_str += f"  - Vuelo: {s.get('airline','')}{s.get('flight_number','')} {s.get('from','')}→{s.get('to','')} {s.get('date','')} {s.get('time','')}\n"
+        elif stype == "train":
+            seg_str += f"  - Tren: {s.get('operator','')} {s.get('train_number','')} {s.get('from','')}→{s.get('to','')} {s.get('date','')}\n"
+        elif stype == "hotel":
+            seg_str += f"  - Hotel: {s.get('name','')} {s.get('city','')} {s.get('check_in','')}→{s.get('check_out','')}\n"
+        elif stype == "car":
+            seg_str += f"  - Coche: {s.get('company','')} {s.get('city','')} {s.get('pickup_date','')}→{s.get('return_date','')}\n"
+        elif stype == "restaurant":
+            seg_str += f"  - Restaurante: {s.get('name','')} {s.get('city','')} {s.get('date','')}\n"
+        elif stype == "activity":
+            seg_str += f"  - Actividad: {s.get('name','')} {s.get('city','')} {s.get('date','')} - {s.get('description','')}\n"
+
+    section_prompts = {
+        "restaurants": {
+            "section_name": "restaurantes",
+            "existing": _serialize_for_prompt(existing_itinerary.get("restaurants", []), ["name", "type", "price_range"]),
+            "instruction": "Devuelve un array JSON con 3-5 nuevos restaurantes que sean DIFERENTES a los ya listados.",
+            "output_schema": '{"name": "Nombre restaurante", "type": "cocina catalana", "description": "2-3 frases llamativas", "price_range": "15-30€"}',
+        },
+        "hotels": {
+            "section_name": "hospedaje",
+            "existing": _serialize_for_prompt(existing_itinerary.get("hotels", []), ["name", "zone", "price_range"]),
+            "instruction": "Devuelve un array JSON con 3-5 nuevos hoteles/alojamientos DIFERENTES a los ya listados.",
+            "output_schema": '{"name": "Nombre hotel", "zone": "barrio o zona", "description": "2-3 frases", "price_range": "80-150€", "highlights": ["piscina", "vistas"]}',
+        },
+        "visit": {
+            "section_name": "lugares que visitar",
+            "existing": _serialize_for_prompt(
+                existing_itinerary.get("places_of_interest", []) + existing_itinerary.get("historical_sites", []),
+                ["name", "type", "period"],
+            ),
+            "instruction": "Devuelve un objeto JSON con dos arrays: 'places_of_interest' (no historicos) y 'historical_sites' (sitios historicos con 'period' y 'curiosity'). 2-3 por categoria. DIFERENTES a los ya listados.",
+            "output_schema": '{"places_of_interest": [{"name": "...", "type": "museo", "description": "...", "tips": ["..."]}], "historical_sites": [{"name": "...", "period": "s.XIX", "description": "...", "curiosity": "... rumor curioso"}]}',
+        },
+        "tips": {
+            "section_name": "consejos",
+            "existing": _serialize_for_prompt(
+                [{"tip": t} for t in existing_itinerary.get("transport_tips", [])]
+                + [{"tip": t} for t in existing_itinerary.get("general_tips", [])]
+                + [{"tip": t} for t in existing_itinerary.get("cultural_notes", [])],
+                ["tip"],
+            ),
+            "instruction": "Devuelve un objeto JSON con 3 arrays: 'transport_tips', 'general_tips', 'cultural_notes'. 2-3 tips por categoria. DIFERENTES a los ya listados.",
+            "output_schema": '{"transport_tips": ["tip transporte..."], "general_tips": ["tip general..."], "cultural_notes": ["nota cultural..."]}',
+        },
+    }
+
+    sec = section_prompts.get(section)
+    if not sec:
+        return {"error": "Seccion desconocida"}
+
+    prompt = f"""Eres un guia local experto. El usuario pide MAS recomendaciones para su viaje.
+
+VIAJE: {dest_str}
+FECHAS: {dates_str}
+PASAJEROS: {passengers_str}
+{chr(10) + "RESUMEN: " + overview[:500] if overview else ""}
+
+CLIMA PREVISTO:
+{weather_str or "(no disponible)"}
+
+BILLETES:
+{passes_str if passes_str else "(sin billetes)"}
+RESERVAS MANUALES:
+{seg_str if seg_str else "(ninguna)"}
+
+YA RECOMENDADO ({sec['section_name']}):
+{sec['existing']}
+
+{sec['instruction']}
+
+Estructura esperada del JSON:
+{sec['output_schema']}
+
+Responde SOLO el JSON, sin markdown ni texto alrededor."""
+
+    try:
+        client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+        response = client.chat.completions.create(
+            model=DEEPSEEK_MODEL,
+            messages=[
+                {"role": "system", "content": "Eres un guia de viajes experto. Responde solo JSON valido, sin markdown."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.6,
+            max_tokens=4096,
+        )
+        content = response.choices[0].message.content or "{}"
+
+        if session_id and response.usage:
+            from token_tracker import record_usage
+            record_usage(session_id, response.usage.prompt_tokens, response.usage.completion_tokens)
+
+    except Exception as e:
+        print(f"[deepseek expand] Error: {e}")
+        return {"error": f"Error al expandir {sec['section_name']}: {e}"}
+
+    new_items = _parse_expand_response(content, section)
+
+    if section == "visit":
+        return {
+            "places_of_interest": new_items.get("places_of_interest", []),
+            "historical_sites": new_items.get("historical_sites", []),
+            "section": section,
+        }
+    if section == "tips":
+        return {
+            "transport_tips": new_items.get("transport_tips", []),
+            "general_tips": new_items.get("general_tips", []),
+            "cultural_notes": new_items.get("cultural_notes", []),
+            "section": section,
+        }
+    if isinstance(new_items, list):
+        return {"items": new_items, "section": section}
+    return {"items": [], "section": section}
+
+
+def _parse_expand_response(content: str, section: str) -> dict | list:
+    """Parsea la respuesta JSON del LLM con fallback robusto."""
+    import re
+
+    try:
+        parsed = json.loads(content)
+        return parsed
+    except json.JSONDecodeError:
+        pass
+
+    match = re.search(r'(\[.*\]|\{.*\})', content, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return [] if section in ("restaurants", "hotels") else {}
+
+
+async def generate_quiz(
+    passes: list[dict],
+    segments: list[dict] | None = None,
+    session_id: str | None = None,
+) -> dict:
+    if segments is None:
+        segments = []
+
+    flights = [p for p in passes if p.get("kind") == "flight"]
+    flights_sorted = _sort_by_date(flights)
+
+    origin_city = _get_city_name(flights_sorted[0].get("from", "")) if flights_sorted else ""
+    all_dates_set: set[str] = set()
+    for p in passes:
+        fd = p.get("flight_date")
+        if fd:
+            all_dates_set.add(fd)
+    for s in segments:
+        fd = s.get("date") or s.get("check_in")
+        if fd:
+            all_dates_set.add(fd)
+
+    all_dates = sorted(all_dates_set) if all_dates_set else []
+    calendar = _build_daily_calendar(passes, segments, all_dates)
+
+    all_cities = list(dict.fromkeys(
+        d["city"] for d in calendar if d["city"]
+    ))
+    destinations = [c for c in all_cities if c != origin_city] or all_cities[:1]
+    if not destinations:
+        return {"error": "No se pudieron determinar los destinos del viaje", "questions": []}
+
+    dest_str = ", ".join(destinations)
+
+    prompt = f"""Eres un creador de quizzes de viaje. Genera 10 preguntas tipo test sobre los destinos de este viaje.
+
+DESTINOS: {dest_str}
+VIAJE: {', '.join(all_dates) if all_dates else "fechas no especificadas"}
+
+=== REGLAS ===
+- 10 preguntas cortas y faciles, en español
+- Cada pregunta tiene 3 opciones de respuesta, solo UNA correcta
+- Las preguntas deben ser entretenidas y educativas sobre {dest_str}
+- Basate en hechos reales: historia, cultura, gastronomia, geografia, monumentos, curiosidades
+- NO incluir preguntas sobre el origen del viaje ({origin_city}), SOLO sobre los destinos
+- Dificultad: facil — apto para viajeros casuales
+- La respuesta correcta debe estar mezclada aleatoriamente entre las 3 opciones
+- Las opciones incorrectas deben ser verosimiles, no absurdas
+
+=== FORMATO DE SALIDA ===
+Responde UNICAMENTE con el JSON. Sin markdown, sin explicaciones.
+
+{{
+  "questions": [
+    {{
+      "question": "Texto de la pregunta?",
+      "options": ["opcion A", "opcion B", "opcion C"],
+      "correct_index": 0
+    }}
+  ]
+}}"""
+
+    if not DEEPSEEK_API_KEY:
+        return {
+            "error": "DEEPSEEK_API_KEY no configurada",
+            "questions": [],
+            "destinations": destinations,
+        }
+
+    try:
+        client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+        response = client.chat.completions.create(
+            model=DEEPSEEK_MODEL,
+            messages=[
+                {"role": "system", "content": "Eres un creador de quizzes de viaje. Responde solo JSON valido, sin markdown."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.7,
+            max_tokens=8192,
+        )
+        content = response.choices[0].message.content or "{}"
+
+        if session_id and response.usage:
+            from token_tracker import record_usage
+            record_usage(session_id, response.usage.prompt_tokens, response.usage.completion_tokens)
+
+    except Exception as e:
+        print(f"[deepseek quiz] Error: {e}")
+        return {"error": f"Error generando quiz: {e}", "questions": []}
+
+    questions = _parse_quiz_response(content)
+    if not questions:
+        return {
+            "error": "No se pudo parsear la respuesta del quiz",
+            "questions": [],
+            "destinations": destinations,
+            "raw_response": content[:1000],
+        }
+
+    validated = _validate_quiz_questions(questions)
+    _shuffle_quiz_options(validated)
+    return {"questions": validated, "destinations": destinations}
+
+
+def _shuffle_quiz_options(questions: list[dict]):
+    import random
+    for q in questions:
+        opts = q.get("options", [])
+        if len(opts) != 3:
+            continue
+        idx = q.get("correct_index", 0)
+        if not isinstance(idx, int) or idx < 0 or idx >= 3:
+            idx = 0
+        correct_text = opts[idx]
+        indices = list(range(3))
+        random.shuffle(indices)
+        q["options"] = [opts[i] for i in indices]
+        q["correct_index"] = q["options"].index(correct_text)
+
+
+def _validate_quiz_questions(questions: list[dict]) -> list[dict]:
+    valid = []
+    for q in questions:
+        if not q.get("question") or not q.get("options"):
+            continue
+        opts = q["options"]
+        if len(opts) != 3:
+            continue
+        idx = q.get("correct_index", 0)
+        if not isinstance(idx, int) or idx < 0 or idx >= 3:
+            idx = 0
+        valid.append({
+            "question": q["question"],
+            "options": opts,
+            "correct_index": idx,
+        })
+    return valid if len(valid) >= 8 else questions
+
+
+def _parse_quiz_response(content: str) -> list[dict] | None:
+    import re
+
+    try:
+        parsed = json.loads(content)
+        questions = parsed.get("questions", [])
+        if questions and isinstance(questions, list):
+            return questions
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    match = re.search(r'\{[\s\S]*\}', content)
+    if match:
+        try:
+            parsed = json.loads(match.group())
+            return parsed.get("questions", [])
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return None

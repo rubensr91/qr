@@ -7,10 +7,14 @@ Endpoints:
   POST /api/admin/block      -> bloquea/desbloquea una sesion
 """
 
+import sys
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from .token_tracker import block_session, grant_tokens, list_all_sessions
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from token_tracker import block_session, grant_tokens, list_all_sessions
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 

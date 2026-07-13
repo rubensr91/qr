@@ -147,11 +147,32 @@
   border-radius: 6px;
   animation: skeleton-shimmer 1.5s infinite linear;
   height: 14px;
+  margin-bottom: var(--space-2);
+
+  &:last-child { margin-bottom: 0; }
 }
 .skeleton-line { width: 100%; }
-.skeleton-line.short { width: 50%; }
+.skeleton-line.w-full { width: 100%; }
+.skeleton-line.w-80 { width: 80%; }
+.skeleton-line.w-60 { width: 60%; }
+.skeleton-line.w-40 { width: 40%; }
 
 @keyframes skeleton-shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+.trip-card__date {
+  font-size: var(--fs-tiny);
+  color: var(--navy-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: var(--space-1);
+}
+
+// Processing cancel button
+.proc-card__cancel {
+  margin-top: var(--space-4);
+  --color: var(--navy-muted);
+  font-size: var(--fs-small);
 }

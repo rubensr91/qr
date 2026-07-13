@@ -103,6 +103,13 @@ ion-accordion {
   font-weight: 500;
 }
 
+.seg-form__error {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--fs-small);
+  font-weight: 500;
+}
+
 .summary-list {
   display: flex;
   flex-direction: column;

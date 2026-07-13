@@ -290,6 +290,24 @@
 }
 
 // Perforacion lateral (look de boarding pass)
+.bp-new-badge {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--paper);
+  background: var(--teal);
+  padding: 3px 8px;
+  border-radius: 4px;
+  z-index: 3;
+}
+
+.result-actions {
+  padding: var(--space-2) 0 var(--space-8);
+}
+
 .bp-perforation {
   position: absolute;
   top: 0;

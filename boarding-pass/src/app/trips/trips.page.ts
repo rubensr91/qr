@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { AlertController, ToastController } from '@ionic/angular';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { firstValueFrom } from 'rxjs';
@@ -17,6 +18,7 @@ export class TripsPage {
 
   busy = false;
   progress = '';
+  private cancelled = false;
 
   constructor(
     private svc: BoardingPassService,
@@ -24,6 +26,17 @@ export class TripsPage {
     private alertCtrl: AlertController,
     private toastCtrl: ToastController,
   ) {}
+
+  cancel() {
+    this.cancelled = true;
+    this.busy = false;
+    this.progress = '';
+  }
+
+  onRefresh(event: any) {
+    this.loadTrips();
+    event.target.complete();
+  }
 
   /** Ionic lifecycle: se ejecuta cada vez que la pagina se muestra. */
   ionViewWillEnter() {
@@ -70,6 +83,7 @@ export class TripsPage {
           text: 'Eliminar',
           role: 'destructive',
           handler: () => {
+            try { Haptics.impact({ style: ImpactStyle.Heavy }); } catch {}
             this.svc.deleteTrip(trip.id).subscribe({
               next: () => {
                 this.trips = this.trips.filter((t) => t.id !== trip.id);
@@ -127,6 +141,7 @@ export class TripsPage {
     const errorMessages: string[] = [];
 
     for (let i = 0; i < picked.length; i++) {
+      if (this.cancelled) break;
       const file = picked[i];
       const filename = file.name || `pdf_${i + 1}.pdf`;
       this.progress = `${i + 1}/${picked.length}`;
@@ -148,6 +163,13 @@ export class TripsPage {
         errorMessages.push(filename + ': ' + msg);
         console.error('Error ' + filename + ':', msg, e);
       }
+      if (this.cancelled) break;
+    }
+    if (this.cancelled) {
+      this.cancelled = false;
+      this.busy = false;
+      this.progress = '';
+      return;
     }
 
     this.busy = false;
@@ -213,6 +235,24 @@ export class TripsPage {
     this.router.navigate(['/trip-create'], {
       state: { editTripId: trip.id, tripName: trip.trip_name, segments: trip.segments },
     });
+  }
+
+  tripDateRange(trip: Trip): string {
+    const dates = trip.pass_data.passes
+      .map(p => p.flight_date)
+      .filter((d): d is string => !!d)
+      .sort();
+    if (!dates.length) return '';
+    if (dates.length === 1) return this.formatShortDate(dates[0]);
+    const first = this.formatShortDate(dates[0]);
+    const last = this.formatShortDate(dates[dates.length - 1]);
+    return `${first} — ${last}`;
+  }
+
+  private formatShortDate(date: string): string {
+    const parts = date.split('-');
+    if (parts.length !== 3) return date;
+    return `${parts[2]}/${parts[1]}`;
   }
 
   /** Determina el icono de modo de transporte para la tarjeta del viaje. */

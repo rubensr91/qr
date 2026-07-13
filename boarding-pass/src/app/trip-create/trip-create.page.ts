@@ -1,6 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { FilePicker } from '@capawesome/capacitor-file-picker';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { ToastController } from '@ionic/angular';
 import { firstValueFrom } from 'rxjs';
 import { BoardingPassService, Pass, TravelSegment } from '../services/boarding-pass.service';
@@ -27,6 +28,7 @@ export class TripCreatePage {
   segments = signal<TravelSegment[]>([]);
   uploadedPdfs = signal<{ name: string; passes: Pass[] }[]>([]);
   openForm = signal<string | null>(null);
+  formErrors: Record<string, string> = {};
 
   editTripId: number | null = null;
   existingTripName = '';
@@ -105,43 +107,64 @@ export class TripCreatePage {
 
   // --- Segment handlers ---
 
+  private validateRequired(value: string, label: string): string | null {
+    if (!value?.trim()) return `El campo "${label}" es obligatorio`;
+    return null;
+  }
+
   addSegment(type: string) {
+    this.formErrors = {};
     let seg: TravelSegment | null = null;
+
     switch (type) {
-      case 'flight':
-        if (!this.flightForm.airline && !this.flightForm.flight_number) return;
+      case 'flight': {
+        const err = this.validateRequired(this.flightForm.airline, 'Aerolínea') || this.validateRequired(this.flightForm.flight_number, 'Nº vuelo');
+        if (err) { this.formErrors[type] = err; return; }
         seg = { type: 'flight', ...this.flightForm };
         this.flightForm = { airline: '', flight_number: '', from: '', to: '', date: '', time: '' };
         break;
-      case 'train':
-        if (!this.trainForm.operator && !this.trainForm.train_number) return;
+      }
+      case 'train': {
+        const err = this.validateRequired(this.trainForm.operator, 'Operador');
+        if (err) { this.formErrors[type] = err; return; }
         seg = { type: 'train', ...this.trainForm };
         this.trainForm = { operator: '', train_number: '', from: '', to: '', date: '', time: '' };
         break;
-      case 'hotel':
-        if (!this.hotelForm.name) return;
+      }
+      case 'hotel': {
+        const err = this.validateRequired(this.hotelForm.name, 'Nombre');
+        if (err) { this.formErrors[type] = err; return; }
         seg = { type: 'hotel', ...this.hotelForm };
         this.hotelForm = { name: '', city: '', check_in: '', check_out: '' };
         break;
-      case 'car':
-        if (!this.carForm.company) return;
+      }
+      case 'car': {
+        const err = this.validateRequired(this.carForm.company, 'Compañía');
+        if (err) { this.formErrors[type] = err; return; }
         seg = { type: 'car', ...this.carForm };
         this.carForm = { company: '', city: '', pickup_date: '', return_date: '' };
         break;
-      case 'restaurant':
-        if (!this.restaurantForm.name) return;
+      }
+      case 'restaurant': {
+        const err = this.validateRequired(this.restaurantForm.name, 'Nombre');
+        if (err) { this.formErrors[type] = err; return; }
         seg = { type: 'restaurant', ...this.restaurantForm };
         this.restaurantForm = { name: '', city: '', date: '', time: '' };
         break;
-      case 'activity':
-        if (!this.activityForm.name) return;
+      }
+      case 'activity': {
+        const err = this.validateRequired(this.activityForm.name, 'Nombre');
+        if (err) { this.formErrors[type] = err; return; }
         seg = { type: 'activity', ...this.activityForm };
         this.activityForm = { name: '', city: '', date: '', description: '' };
         break;
+      }
     }
     if (seg) {
       this.segments.set([...this.segments(), seg]);
       this.openForm.set(null);
+      this.formErrors = {};
+      try { Haptics.impact({ style: ImpactStyle.Light }); } catch {}
     }
   }
 
@@ -206,6 +229,7 @@ export class TripCreatePage {
       );
 
       await this.toast('Viaje guardado', 'success');
+      try { Haptics.impact({ style: ImpactStyle.Medium }); } catch {}
       this.router.navigate(['/trips']);
     } catch (e: any) {
       this.busy = false;
