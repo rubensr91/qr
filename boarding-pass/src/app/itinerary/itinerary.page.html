@@ -106,6 +106,10 @@
         <ion-icon name="bulb-outline"></ion-icon>
         <ion-label>Tips</ion-label>
       </ion-segment-button>
+      <ion-segment-button value="quiz" *ngIf="itinerary">
+        <ion-icon name="help-circle-outline"></ion-icon>
+        <ion-label>Quiz</ion-label>
+      </ion-segment-button>
     </ion-segment>
 
     <!-- BILLETES -->
@@ -387,6 +391,87 @@
         <ion-text color="danger" class="expand-error" *ngIf="expandErrors['visit']">
           {{ expandErrors['visit'] }}
         </ion-text>
+      </div>
+    </div>
+
+    <!-- QUIZ -->
+    <div class="section" *ngIf="activeTab === 'quiz'">
+      <div *ngIf="quizLoading" class="state-container">
+        <ion-spinner name="dots"></ion-spinner>
+        <p>Generando preguntas…</p>
+      </div>
+
+      <div *ngIf="!quizLoading && quizError && !quizQuestions.length" class="state-container error">
+        <h2>Error</h2>
+        <p>{{ quizError }}</p>
+        <ion-button (click)="generateQuiz()" fill="outline">Reintentar</ion-button>
+      </div>
+
+      <div *ngIf="!quizLoading && quizQuestions.length" class="quiz">
+        <div class="quiz__header">
+          <h3 class="quiz__title">Pon a prueba tus conocimientos</h3>
+          <p class="quiz__subtitle" *ngIf="quizDestinations.length">
+            {{ quizDestinations.join(', ') }}
+          </p>
+          <div class="quiz__progress" *ngIf="!quizSubmitted">
+            <div class="quiz__progress-bar">
+              <div class="quiz__progress-fill" [style.width]="quizAnsweredCount() / quizQuestions.length * 100 + '%'"></div>
+            </div>
+            <span class="quiz__progress-text">{{ quizAnsweredCount() }} / {{ quizQuestions.length }}</span>
+          </div>
+        </div>
+
+        <div class="quiz__question" *ngFor="let q of quizQuestions; let i = index">
+          <div class="quiz__q-header">
+            <span class="quiz__q-num">Pregunta {{ i + 1 }}</span>
+            <span class="quiz__q-badge" *ngIf="quizSubmitted"
+                  [class.correct]="quizAnswers[i] === q.correct_index"
+                  [class.wrong]="quizAnswers[i] !== q.correct_index">
+              {{ quizAnswers[i] === q.correct_index ? 'Correcto' : quizAnswers[i] === null ? 'Sin responder' : 'Incorrecto' }}
+            </span>
+          </div>
+          <p class="quiz__q-text">{{ q.question }}</p>
+          <div class="quiz__options">
+            <button class="quiz__option"
+                    *ngFor="let opt of q.options; let oi = index"
+                    [class.selected]="quizAnswers[i] === oi"
+                    [class.correct]="quizSubmitted && oi === q.correct_index"
+                    [class.wrong]="quizSubmitted && quizAnswers[i] === oi && oi !== q.correct_index"
+                    [disabled]="quizSubmitted"
+                    (click)="selectAnswer(i, oi)">
+              <span class="quiz__opt-letter">{{ ['A', 'B', 'C'][oi] }}</span>
+              <span class="quiz__opt-text">{{ opt }}</span>
+              <span class="quiz__opt-tag" *ngIf="quizSubmitted && oi === q.correct_index">Correcta</span>
+              <span class="quiz__opt-tag wrong-tag" *ngIf="quizSubmitted && quizAnswers[i] === oi && oi !== q.correct_index">Tu respuesta</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="quiz__actions" *ngIf="!quizSubmitted">
+          <ion-button expand="block" class="btn-resolver"
+                      (click)="submitQuiz()"
+                      [disabled]="quizIncomplete()">
+            Resolver
+          </ion-button>
+        </div>
+
+        <div class="quiz__result" *ngIf="quizSubmitted">
+          <div class="quiz__score">
+            <span class="quiz__score-text">{{ quizScore }} / {{ quizQuestions.length }}</span>
+            <span class="quiz__score-label">
+              {{ quizScore === quizQuestions.length ? 'Perfecto' : quizScore >= 7 ? 'Muy bien' : quizScore >= 5 ? 'Bien' : 'Sigue intentándolo' }}
+            </span>
+          </div>
+          <ion-button expand="block" fill="outline" class="btn-new-quiz" (click)="generateQuiz()">
+            Nuevo cuestionario
+          </ion-button>
+        </div>
+      </div>
+
+      <div *ngIf="!quizLoading && !quizQuestions.length && !quizError" class="state-container">
+        <h2>¿Qué sabes de tu destino?</h2>
+        <p>Pon a prueba tus conocimientos con 10 preguntas sobre los lugares que vas a visitar.</p>
+        <ion-button class="btn-resolver" (click)="generateQuiz()">Generar cuestionario</ion-button>
       </div>
     </div>
 

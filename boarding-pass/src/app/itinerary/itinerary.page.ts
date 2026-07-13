@@ -15,6 +15,7 @@ import {
   Restaurant,
   WeatherDay,
 } from '../services/itinerary.service';
+import { QuizQuestion, QuizService } from '../services/quiz.service';
 
 const SEGMENT_ICONS: Record<string, string> = {
   flight: 'airplane', train: 'train', hotel: 'bed',
@@ -63,7 +64,7 @@ export class ItineraryPage {
   loading = true;
   generating = false;
   error = '';
-  activeTab: 'plan' | 'cards' | 'bookings' | 'eat' | 'sleep' | 'visit' | 'tips' = 'plan';
+  activeTab: 'plan' | 'cards' | 'bookings' | 'eat' | 'sleep' | 'visit' | 'tips' | 'quiz' = 'plan';
 
   enlargedBarcode: BarcodeImage | null = null;
   private previousBrightness: number | undefined;
@@ -71,11 +72,21 @@ export class ItineraryPage {
   expanding: Record<string, boolean> = {};
   expandErrors: Record<string, string> = {};
 
+  // Quiz state
+  quizQuestions: QuizQuestion[] = [];
+  quizAnswers: (number | null)[] = [];
+  quizSubmitted = false;
+  quizScore = 0;
+  quizLoading = false;
+  quizError = '';
+  quizDestinations: string[] = [];
+
   constructor(
     private router: Router,
     private itinerarySvc: ItineraryService,
     private bpSvc: BoardingPassService,
     private toastCtrl: ToastController,
+    private quizSvc: QuizService,
   ) {}
 
   ionViewWillEnter() {
@@ -411,6 +422,67 @@ export class ItineraryPage {
         break;
     }
     this.itinerary = { ...this.itinerary };
+  }
+
+  generateQuiz() {
+    this.quizLoading = true;
+    this.quizError = '';
+    this.quizQuestions = [];
+    this.quizSubmitted = false;
+    const sid = this.bpSvc.getSessionId();
+
+    this.quizSvc.generate(this.tripId, sid).subscribe({
+      next: (resp) => {
+        this.quizLoading = false;
+        if (resp.error) {
+          this.quizError = resp.error;
+          this.toast(resp.error, 'danger');
+          return;
+        }
+        this.quizQuestions = resp.questions || [];
+        this.quizAnswers = this.quizQuestions.map(() => null);
+        this.quizDestinations = resp.destinations || [];
+        this.activeTab = 'quiz';
+      },
+      error: (err: any) => {
+        this.quizLoading = false;
+        const msg = err?.error?.detail?.error || err?.error?.detail || err?.message || 'Error al generar quiz';
+        this.quizError = msg;
+        this.toast('Error: ' + msg, 'danger');
+      },
+    });
+  }
+
+  selectAnswer(index: number, optionIndex: number) {
+    if (this.quizSubmitted) return;
+    this.quizAnswers[index] = optionIndex;
+  }
+
+  quizIncomplete(): boolean {
+    return this.quizAnswers.some(a => a === null);
+  }
+
+  quizAnsweredCount(): number {
+    return this.quizAnswers.filter(a => a !== null).length;
+  }
+
+  submitQuiz() {
+    let correct = 0;
+    for (let i = 0; i < this.quizQuestions.length; i++) {
+      if (this.quizAnswers[i] === this.quizQuestions[i].correct_index) {
+        correct++;
+      }
+    }
+    this.quizScore = correct;
+    this.quizSubmitted = true;
+  }
+
+  resetQuiz() {
+    this.quizQuestions = [];
+    this.quizAnswers = [];
+    this.quizSubmitted = false;
+    this.quizScore = 0;
+    this.quizError = '';
   }
 
   private async toast(msg: string, color: string) {
