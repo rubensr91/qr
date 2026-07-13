@@ -25,7 +25,7 @@ BACKEND = Path(__file__).resolve().parent
 sys.path.insert(0, str(BACKEND))
 
 from qr_client import extract_codes, extract_codes_from_image  # noqa: E402
-from itinerary import generate_itinerary, generate_trip_name  # noqa: E402
+from itinerary import expand_section, generate_itinerary, generate_trip_name  # noqa: E402
 from parser import infer_years, parse_code  # noqa: E402
 from token_tracker import check_limit, get_usage  # noqa: E402
 from token_tracker import _ensure_table as _ensure_token_table  # noqa: E402
@@ -632,6 +632,69 @@ async def generate_trip_itinerary(trip_id: int, request: Request, x_session_id: 
         response["token_usage"] = token_info
 
     return response
+
+
+# --- Expand section ---
+
+
+@app.post("/api/itinerary/{trip_id}/expand")
+async def expand_trip_section(
+    trip_id: int,
+    request: Request,
+    x_session_id: str = Header(default=""),
+):
+    """Genera mas recomendaciones de una seccion concreta del itinerario.
+
+    Body: { "section": "restaurants" | "hotels" | "visit" | "tips" }
+    """
+    sid = _get_session_id_via_header(request, x_session_id)
+    body = await request.json()
+    section = (body.get("section") or "").strip()
+
+    if section not in ("restaurants", "hotels", "visit", "tips"):
+        raise HTTPException(status_code=400, detail="Seccion no valida")
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT id, pass_data, itinerary_data, segments FROM trips WHERE id = ? AND session_id = ?",
+        (trip_id, sid),
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+
+    pass_data = json.loads(row["pass_data"])
+    passes = pass_data.get("passes", [])
+    segments = json.loads(row["segments"] or "[]")
+    itinerary_data = row["itinerary_data"]
+    existing_itinerary = json.loads(itinerary_data) if itinerary_data else {}
+
+    # Verificar limite de tokens
+    allowed, usage_stats = check_limit(sid)
+    if not allowed:
+        if usage_stats.get("blocked"):
+            error_msg = "Sesion bloqueada por el administrador"
+        else:
+            error_msg = "Limite de tokens excedido para esta sesion"
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": error_msg,
+                "blocked": usage_stats.get("blocked", False),
+                "total_tokens_used": usage_stats["total_tokens_used"],
+                "max_tokens": usage_stats["max_tokens"],
+                "remaining": usage_stats["remaining"],
+                "request_count": usage_stats["request_count"],
+            },
+        )
+
+    try:
+        result = expand_section(passes, segments, existing_itinerary, section, session_id=sid)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error expandiendo {section}: {e}")
+
+    return result
 
 
 # --- Token Usage ---

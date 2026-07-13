@@ -296,6 +296,17 @@
           <p>{{ r.description }}</p>
         </ion-card-content>
       </ion-card>
+      <div class="expand-section">
+        <ion-button expand="block" fill="outline" class="btn-expand"
+                    (click)="expandSection('restaurants')"
+                    [disabled]="expanding['restaurants']">
+          <ion-icon [name]="expanding['restaurants'] ? 'hourglass-outline' : 'search-outline'" slot="start"></ion-icon>
+          {{ expanding['restaurants'] ? 'Buscando…' : 'Buscar más restaurantes' }}
+        </ion-button>
+        <ion-text color="danger" class="expand-error" *ngIf="expandErrors['restaurants']">
+          {{ expandErrors['restaurants'] }}
+        </ion-text>
+      </div>
     </div>
 
     <!-- HOTELES -->
@@ -312,11 +323,21 @@
           </div>
         </ion-card-content>
       </ion-card>
+      <div class="expand-section">
+        <ion-button expand="block" fill="outline" class="btn-expand"
+                    (click)="expandSection('hotels')"
+                    [disabled]="expanding['hotels']">
+          <ion-icon [name]="expanding['hotels'] ? 'hourglass-outline' : 'search-outline'" slot="start"></ion-icon>
+          {{ expanding['hotels'] ? 'Buscando…' : 'Buscar más alojamientos' }}
+        </ion-button>
+        <ion-text color="danger" class="expand-error" *ngIf="expandErrors['hotels']">
+          {{ expandErrors['hotels'] }}
+        </ion-text>
+      </div>
     </div>
 
     <!-- LUGARES DE INTERÉS + SITIOS HISTÓRICOS -->
     <div class="section" *ngIf="activeTab === 'visit'">
-      <!-- Lugares de interés -->
       <h3 *ngIf="itinerary?.places_of_interest?.length">Lugares de interés</h3>
       <ion-card class="rec-card" *ngFor="let p of itinerary!.places_of_interest">
         <ion-card-header>
@@ -331,7 +352,6 @@
         </ion-card-content>
       </ion-card>
 
-      <!-- Sitios históricos -->
       <h3 *ngIf="itinerary?.historical_sites?.length">Sitios históricos</h3>
       <ion-card class="rec-card historical" *ngFor="let h of itinerary!.historical_sites">
         <ion-card-header>
@@ -346,6 +366,18 @@
           </div>
         </ion-card-content>
       </ion-card>
+
+      <div class="expand-section">
+        <ion-button expand="block" fill="outline" class="btn-expand"
+                    (click)="expandSection('visit')"
+                    [disabled]="expanding['visit']">
+          <ion-icon [name]="expanding['visit'] ? 'hourglass-outline' : 'search-outline'" slot="start"></ion-icon>
+          {{ expanding['visit'] ? 'Buscando…' : 'Buscar más lugares' }}
+        </ion-button>
+        <ion-text color="danger" class="expand-error" *ngIf="expandErrors['visit']">
+          {{ expandErrors['visit'] }}
+        </ion-text>
+      </div>
     </div>
 
     <!-- TIPS -->
@@ -382,6 +414,18 @@
           </ul>
         </ion-card-content>
       </ion-card>
+
+      <div class="expand-section">
+        <ion-button expand="block" fill="outline" class="btn-expand"
+                    (click)="expandSection('tips')"
+                    [disabled]="expanding['tips']">
+          <ion-icon [name]="expanding['tips'] ? 'hourglass-outline' : 'search-outline'" slot="start"></ion-icon>
+          {{ expanding['tips'] ? 'Buscando…' : 'Buscar más tips' }}
+        </ion-button>
+        <ion-text color="danger" class="expand-error" *ngIf="expandErrors['tips']">
+          {{ expandErrors['tips'] }}
+        </ion-text>
+      </div>
     </div>
 
     <!-- Empty tab -->

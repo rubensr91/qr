@@ -1,10 +1,12 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { ToastController } from '@ionic/angular';
 import { ScreenBrightness } from '@capacitor-community/screen-brightness';
 import { BarcodeImage, BoardingPassService, Pass, TravelSegment } from '../services/boarding-pass.service';
 import {
   DailyPlan,
+  ExpandResponse,
   HistoricalSite,
   Hotel,
   ItineraryData,
@@ -65,6 +67,9 @@ export class ItineraryPage {
 
   enlargedBarcode: BarcodeImage | null = null;
   private previousBrightness: number | undefined;
+
+  expanding: Record<string, boolean> = {};
+  expandErrors: Record<string, string> = {};
 
   constructor(
     private router: Router,
@@ -334,6 +339,64 @@ export class ItineraryPage {
     this.router.navigate(['/trip-create'], {
       state: { editTripId: this.tripId, tripName: this.tripName, segments: this.segments },
     });
+  }
+
+  expandSection(section: string) {
+    if (this.expanding[section]) return;
+
+    this.expanding[section] = true;
+    this.expandErrors[section] = '';
+    const sid = this.bpSvc.getSessionId();
+
+    this.itinerarySvc.expandSection(this.tripId, section, sid).subscribe({
+      next: (resp: ExpandResponse) => {
+        this.expanding[section] = false;
+        if (resp.error) {
+          this.expandErrors[section] = resp.error;
+          this.toast(resp.error, 'danger');
+          return;
+        }
+        if (!resp.items?.length) {
+          this.toast('No se encontraron más sugerencias', 'warning');
+          return;
+        }
+        this.appendToSection(section, resp.items);
+        this.toast(`${resp.items.length} sugerencias añadidas`, 'success');
+        try { Haptics.impact({ style: ImpactStyle.Medium }); } catch {}
+      },
+      error: (err: any) => {
+        this.expanding[section] = false;
+        const msg = err?.error?.detail?.error || err?.error?.detail || err?.message || 'Error';
+        this.expandErrors[section] = msg;
+        this.toast('Error: ' + msg, 'danger');
+      },
+    });
+  }
+
+  private appendToSection(section: string, items: any[]) {
+    if (!this.itinerary) return;
+    switch (section) {
+      case 'restaurants':
+        this.itinerary.restaurants = [...(this.itinerary.restaurants || []), ...items];
+        break;
+      case 'hotels':
+        this.itinerary.hotels = [...(this.itinerary.hotels || []), ...items];
+        break;
+      case 'visit': {
+        const poi = items.filter((i: any) => i.type && !i.period);
+        const hist = items.filter((i: any) => i.period);
+        this.itinerary.places_of_interest = [...(this.itinerary.places_of_interest || []), ...poi];
+        this.itinerary.historical_sites = [...(this.itinerary.historical_sites || []), ...hist];
+        break;
+      }
+      case 'tips': {
+        const tips = items.map((i: any) => i.tip || i).filter(Boolean);
+        this.itinerary.transport_tips = [...(this.itinerary.transport_tips || []), ...tips];
+        this.itinerary.general_tips = [...(this.itinerary.general_tips || []), ...tips];
+        break;
+      }
+    }
+    this.itinerary = { ...this.itinerary };
   }
 
   private async toast(msg: string, color: string) {

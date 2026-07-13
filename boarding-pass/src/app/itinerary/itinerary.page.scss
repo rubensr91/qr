@@ -814,6 +814,32 @@
   align-items: center;
 }
 
+// --- Expand section button ---
+.expand-section {
+  text-align: center;
+  padding: var(--space-4) 0;
+}
+
+.btn-expand {
+  --border-color: var(--teal);
+  --color: var(--teal);
+  --border-radius: var(--radius);
+  --border-width: 1.5px;
+  font-weight: 600;
+  font-size: var(--fs-small);
+  max-width: 320px;
+  margin: 0 auto;
+
+  ion-icon { font-size: 1.1rem; }
+}
+
+.expand-error {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--fs-small);
+  font-weight: 500;
+}
+
 // --- Botón crear itinerario ---
 .btn-itinerary {
   --background: linear-gradient(135deg, var(--teal), var(--teal-dark, #0a7a7e));

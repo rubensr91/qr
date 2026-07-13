@@ -87,6 +87,12 @@ export interface ItineraryResponse {
   itinerary: ItineraryData;
 }
 
+export interface ExpandResponse {
+  items: any[];
+  section: string;
+  error?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ItineraryService {
   constructor(private http: HttpClient) {}
@@ -110,6 +116,14 @@ export class ItineraryService {
     return this.http.post<ItineraryResponse>(
       `${environment.apiUrl}/api/itinerary/${tripId}`,
       {},
+      { headers: this._headers(sessionId) },
+    );
+  }
+
+  expandSection(tripId: number, section: string, sessionId: string): Observable<ExpandResponse> {
+    return this.http.post<ExpandResponse>(
+      `${environment.apiUrl}/api/itinerary/${tripId}/expand`,
+      { section },
       { headers: this._headers(sessionId) },
     );
   }
