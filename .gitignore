@@ -84,3 +84,16 @@ trips.db-wal
 
 # qr_service cache
 qr_service/__pycache__/
+
+# OpenCode / agent session files
+.omo/
+.opencode/
+rules/
+sgconfig.yml
+AGENTS.md
+CLAUDE.md
+CLAUDE.md.original
+AGENTS.md.original
+
+# Logs locales
+logs_*.txt
