@@ -415,7 +415,10 @@
           <p class="quiz__subtitle" *ngIf="quizDestinations.length">
             {{ quizDestinations.join(', ') }}
           </p>
-          <div class="quiz__progress" *ngIf="!quizSubmitted">
+        </div>
+
+        <div class="quiz__progress-sticky" *ngIf="!quizSubmitted">
+          <div class="quiz__progress">
             <div class="quiz__progress-bar">
               <div class="quiz__progress-fill" [style.width]="quizAnsweredCount() / quizQuestions.length * 100 + '%'"></div>
             </div>
