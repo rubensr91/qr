@@ -1446,3 +1446,164 @@ def _parse_expand_response(content: str, section: str) -> dict | list:
             pass
 
     return [] if section in ("restaurants", "hotels") else {}
+
+
+async def generate_quiz(
+    passes: list[dict],
+    segments: list[dict] | None = None,
+    session_id: str | None = None,
+) -> dict:
+    if segments is None:
+        segments = []
+
+    flights = [p for p in passes if p.get("kind") == "flight"]
+    flights_sorted = _sort_by_date(flights)
+
+    origin_city = _get_city_name(flights_sorted[0].get("from", "")) if flights_sorted else ""
+    all_dates_set: set[str] = set()
+    for p in passes:
+        fd = p.get("flight_date")
+        if fd:
+            all_dates_set.add(fd)
+    for s in segments:
+        fd = s.get("date") or s.get("check_in")
+        if fd:
+            all_dates_set.add(fd)
+
+    all_dates = sorted(all_dates_set) if all_dates_set else []
+    calendar = _build_daily_calendar(passes, segments, all_dates)
+
+    all_cities = list(dict.fromkeys(
+        d["city"] for d in calendar if d["city"]
+    ))
+    destinations = [c for c in all_cities if c != origin_city] or all_cities[:1]
+    if not destinations:
+        return {"error": "No se pudieron determinar los destinos del viaje", "questions": []}
+
+    dest_str = ", ".join(destinations)
+
+    prompt = f"""Eres un creador de quizzes de viaje. Genera 10 preguntas tipo test sobre los destinos de este viaje.
+
+DESTINOS: {dest_str}
+VIAJE: {', '.join(all_dates) if all_dates else "fechas no especificadas"}
+
+=== REGLAS ===
+- 10 preguntas cortas y faciles, en español
+- Cada pregunta tiene 3 opciones de respuesta, solo UNA correcta
+- Las preguntas deben ser entretenidas y educativas sobre {dest_str}
+- Basate en hechos reales: historia, cultura, gastronomia, geografia, monumentos, curiosidades
+- NO incluir preguntas sobre el origen del viaje ({origin_city}), SOLO sobre los destinos
+- Dificultad: facil — apto para viajeros casuales
+- La respuesta correcta debe estar mezclada aleatoriamente entre las 3 opciones
+- Las opciones incorrectas deben ser verosimiles, no absurdas
+
+=== FORMATO DE SALIDA ===
+Responde UNICAMENTE con el JSON. Sin markdown, sin explicaciones.
+
+{{
+  "questions": [
+    {{
+      "question": "Texto de la pregunta?",
+      "options": ["opcion A", "opcion B", "opcion C"],
+      "correct_index": 0
+    }}
+  ]
+}}"""
+
+    if not DEEPSEEK_API_KEY:
+        return {
+            "error": "DEEPSEEK_API_KEY no configurada",
+            "questions": [],
+            "destinations": destinations,
+        }
+
+    try:
+        client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+        response = client.chat.completions.create(
+            model=DEEPSEEK_MODEL,
+            messages=[
+                {"role": "system", "content": "Eres un creador de quizzes de viaje. Responde solo JSON valido, sin markdown."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.7,
+            max_tokens=8192,
+        )
+        content = response.choices[0].message.content or "{}"
+
+        if session_id and response.usage:
+            from token_tracker import record_usage
+            record_usage(session_id, response.usage.prompt_tokens, response.usage.completion_tokens)
+
+    except Exception as e:
+        print(f"[deepseek quiz] Error: {e}")
+        return {"error": f"Error generando quiz: {e}", "questions": []}
+
+    questions = _parse_quiz_response(content)
+    if not questions:
+        return {
+            "error": "No se pudo parsear la respuesta del quiz",
+            "questions": [],
+            "destinations": destinations,
+            "raw_response": content[:1000],
+        }
+
+    validated = _validate_quiz_questions(questions)
+    _shuffle_quiz_options(validated)
+    return {"questions": validated, "destinations": destinations}
+
+
+def _shuffle_quiz_options(questions: list[dict]):
+    import random
+    for q in questions:
+        opts = q.get("options", [])
+        if len(opts) != 3:
+            continue
+        idx = q.get("correct_index", 0)
+        if not isinstance(idx, int) or idx < 0 or idx >= 3:
+            idx = 0
+        correct_text = opts[idx]
+        indices = list(range(3))
+        random.shuffle(indices)
+        q["options"] = [opts[i] for i in indices]
+        q["correct_index"] = q["options"].index(correct_text)
+
+
+def _validate_quiz_questions(questions: list[dict]) -> list[dict]:
+    valid = []
+    for q in questions:
+        if not q.get("question") or not q.get("options"):
+            continue
+        opts = q["options"]
+        if len(opts) != 3:
+            continue
+        idx = q.get("correct_index", 0)
+        if not isinstance(idx, int) or idx < 0 or idx >= 3:
+            idx = 0
+        valid.append({
+            "question": q["question"],
+            "options": opts,
+            "correct_index": idx,
+        })
+    return valid if len(valid) >= 8 else questions
+
+
+def _parse_quiz_response(content: str) -> list[dict] | None:
+    import re
+
+    try:
+        parsed = json.loads(content)
+        questions = parsed.get("questions", [])
+        if questions and isinstance(questions, list):
+            return questions
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    match = re.search(r'\{[\s\S]*\}', content)
+    if match:
+        try:
+            parsed = json.loads(match.group())
+            return parsed.get("questions", [])
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return None

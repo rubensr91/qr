@@ -25,7 +25,7 @@ BACKEND = Path(__file__).resolve().parent
 sys.path.insert(0, str(BACKEND))
 
 from qr_client import extract_codes, extract_codes_from_image  # noqa: E402
-from itinerary import expand_section, generate_itinerary, generate_trip_name  # noqa: E402
+from itinerary import expand_section, generate_itinerary, generate_quiz, generate_trip_name  # noqa: E402
 from parser import infer_years, parse_code  # noqa: E402
 from token_tracker import check_limit, get_usage  # noqa: E402
 from token_tracker import _ensure_table as _ensure_token_table  # noqa: E402
@@ -724,6 +724,34 @@ def _merge_and_persist(trip_id: int, existing: dict, section: str, result: dict)
     )
     conn.commit()
     conn.close()
+
+
+# --- Quiz ---
+
+
+@app.post("/api/quiz/{trip_id}")
+async def generate_trip_quiz(trip_id: int, request: Request, x_session_id: str = Header(default="")):
+    sid = _get_session_id_via_header(request, x_session_id)
+
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT id, pass_data, segments FROM trips WHERE id = ? AND session_id = ?",
+        (trip_id, sid),
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+
+    pass_data = json.loads(row["pass_data"])
+    passes = pass_data.get("passes", [])
+    segments = json.loads(row["segments"] or "[]")
+
+    if not passes and not segments:
+        raise HTTPException(status_code=400, detail="El viaje no tiene pases ni segmentos")
+
+    result = await generate_quiz(passes, segments, session_id=sid)
+    return result
 
 
 # --- Token Usage ---
