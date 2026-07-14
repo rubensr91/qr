@@ -97,3 +97,5 @@ AGENTS.md.original
 
 # Logs locales
 logs_*.txt
+backend/trips.db
+backend/.deepseek_key

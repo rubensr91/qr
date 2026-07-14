@@ -28,6 +28,10 @@ except ImportError:
     pass
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+if not DEEPSEEK_API_KEY:
+    _key_file = Path(__file__).resolve().parent / ".deepseek_key"
+    if _key_file.exists():
+        DEEPSEEK_API_KEY = _key_file.read_text(encoding="utf-8").strip()
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-chat"
 
@@ -415,11 +419,12 @@ def _infer_city_per_day(
     trains_sorted = _sort_by_date(trains, date_key="flight_date", time_key="flight_time")
 
     # Ciudad inicial: origen del primer vuelo o tren
-    current_city: str | None = None
+    origin_city: str | None = None
     if flights_sorted:
-        current_city = _get_city_name(flights_sorted[0].get("from", ""))
+        origin_city = _get_city_name(flights_sorted[0].get("from", ""))
     elif trains_sorted:
-        current_city = _get_city_name(trains_sorted[0].get("from", ""))
+        origin_city = _get_city_name(trains_sorted[0].get("from", ""))
+    current_city: str | None = origin_city
 
     # Hoteles: rango de fechas -> ciudad (prioridad máxima)
     hotel_map: dict[str, str] = {}
@@ -481,13 +486,47 @@ def _infer_city_per_day(
             city_per_day[date] = current_city
             continue
 
-        # 2. ¿Hay llegada de vuelo/tren en esta fecha?
-        arrivals_today = [e for e in transport_events if e["date"] == date]
-        if arrivals_today:
-            # La última llegada del día fija la ciudad
-            last = arrivals_today[-1]
-            if last["to_city"]:
-                current_city = last["to_city"]
+        # 2. Ciudad con más tiempo de permanencia en el día.
+        #
+        # Construimos una línea temporal de cambios de ciudad según las
+        # llegadas de vuelos/trenes (ordenadas por hora). Entre dos llegadas
+        # consecutivas se está en la ciudad de la llegada anterior.
+        # Sumamos minutos por ciudad (no origen) y elegimos la de más
+        # permanencia. Esto captura correctamente:
+        #   - Viajes con transbordo (Sevilla→Madrid→Toledo) → gana Toledo
+        #   - Ida+vuelta mismo día (Sevilla→Madrid→Sevilla) → gana Madrid
+        timeline: list[tuple[int, str]] = []  # (minutes_from_midnight, to_city)
+        for ev in transport_events:
+            if ev["date"] != date:
+                continue
+            t_min = _parse_time_to_minutes(ev["time"])
+            if t_min is not None and ev["to_city"]:
+                timeline.append((t_min, ev["to_city"]))
+        timeline.sort(key=lambda x: x[0])
+
+        if timeline:
+            # Dwell time inicial: desde medianoche hasta primera llegada
+            city_minutes: dict[str, int] = {}
+            prev_city: str | None = None
+            prev_min = 0
+            for t_min, to_city in timeline:
+                if prev_city and prev_city != origin_city:
+                    dwell = t_min - prev_min
+                    if dwell > 0:
+                        city_minutes[prev_city] = city_minutes.get(prev_city, 0) + dwell
+                prev_city = to_city
+                prev_min = t_min
+            # Desde la última llegada hasta final del día
+            if prev_city and prev_city != origin_city:
+                dwell = 24 * 60 - prev_min
+                if dwell > 0:
+                    city_minutes[prev_city] = city_minutes.get(prev_city, 0) + dwell
+
+            if city_minutes:
+                current_city = max(city_minutes, key=city_minutes.get)
+            elif timeline:
+                # Solo hay llegadas al origen → usar la última
+                current_city = timeline[-1][1]
 
         city_per_day[date] = current_city
 
@@ -543,7 +582,13 @@ def _build_daily_calendar(
     }
 
     # --- Vuelos (PDF/imagen) ---
+    seen_flights: set[tuple] = set()
     for f in flights_sorted:
+        key = (f.get("flight", f.get("flight_number")), f.get("flight_date"), f.get("flight_time"),
+               _get_city_name(f.get("from", "")), _get_city_name(f.get("to", "")))
+        if key in seen_flights:
+            continue
+        seen_flights.add(key)
         fd = f.get("flight_date", "")
         if fd not in days:
             continue
@@ -563,6 +608,7 @@ def _build_daily_calendar(
             time_extra += f" (salida {flight_time})"
         if gate_close:
             time_extra += f" — cierre puertas {gate_close}"
+        _est_arrival = _format_minutes_to_time(arrival_guard_min)
         days[fd]["events"].append({
             "type": "flight_arrival",
             "transport_kind": "flight",
@@ -571,15 +617,22 @@ def _build_daily_calendar(
             "from_city": from_city,
             "to_city": to_city,
             "estimated_duration_min": duration_min,
-            "estimated_arrival_time": _format_minutes_to_time(arrival_guard_min),
+            "estimated_arrival_time": _est_arrival,
             "no_activities_before_minute": arrival_guard_min,
             "no_activities_before": _format_minutes_to_time(arrival_guard_min),
-            "description": f"Llegada {airline}{flight_no} desde {from_city}{time_extra}",
+            "description": f"Llegada a {to_city} a las {_est_arrival}" if _est_arrival else f"Llegada a {to_city}",
             "city": to_city,
         })
 
     # --- Trenes (PDF) ---
+    # Deduplicar: misma ruta (from→to), misma fecha, mismo tren
+    seen_trains: set[tuple] = set()
     for t in trains:
+        key = (t.get("train"), t.get("flight_date"), t.get("flight_time"),
+               _get_city_name(t.get("from", "")), _get_city_name(t.get("to", "")))
+        if key in seen_trains:
+            continue
+        seen_trains.add(key)
         fd = t.get("flight_date", "")
         if fd not in days:
             continue
@@ -593,6 +646,7 @@ def _build_daily_calendar(
         arrival_guard_min = _parse_time_to_minutes(time_str)
         if arrival_guard_min is not None:
             arrival_guard_min += duration_min
+        _est_arrival = _format_minutes_to_time(arrival_guard_min)
         days[fd]["events"].append({
             "type": "train_arrival",
             "transport_kind": "train",
@@ -600,10 +654,10 @@ def _build_daily_calendar(
             "from_city": from_city,
             "to_city": to_city,
             "estimated_duration_min": duration_min,
-            "estimated_arrival_time": _format_minutes_to_time(arrival_guard_min),
+            "estimated_arrival_time": _est_arrival,
             "no_activities_before_minute": arrival_guard_min,
             "no_activities_before": _format_minutes_to_time(arrival_guard_min),
-            "description": f"Llegada tren {train_no} desde {from_city}",
+            "description": f"Llegada a {to_city} a las {_est_arrival}" if _est_arrival else f"Llegada a {to_city}",
             "city": to_city,
         })
 
@@ -632,7 +686,7 @@ def _build_daily_calendar(
             "estimated_arrival_time": _format_minutes_to_time(arrival_guard_min),
             "no_activities_before_minute": arrival_guard_min,
             "no_activities_before": _format_minutes_to_time(arrival_guard_min),
-            "description": f"Llegada {airline}{flight_no} desde {from_city}",
+            "description": f"Llegada {airline}{flight_no}{' desde ' + from_city if from_city and from_city != origin_city else ''}",
             "city": to_city,
         })
 
@@ -661,7 +715,7 @@ def _build_daily_calendar(
             "estimated_arrival_time": _format_minutes_to_time(arrival_guard_min),
             "no_activities_before_minute": arrival_guard_min,
             "no_activities_before": _format_minutes_to_time(arrival_guard_min),
-            "description": f"Llegada {op} {train_no} desde {from_city}",
+            "description": f"Llegada {op} {train_no}{' desde ' + from_city if from_city and from_city != origin_city else ''}",
             "city": to_city,
         })
 
@@ -754,9 +808,13 @@ def _build_daily_calendar(
             {
                 "kind": e.get("transport_kind", "transporte"),
                 "route": (
-                    f"{e.get('from_city', '')} → {e.get('to_city', '')}"
-                    if e.get("from_city") and e.get("to_city")
-                    else e.get("to_city") or e.get("from_city") or "trayecto"
+                    f"{e.get('from_city', '')} → (origen)"
+                    if origin_city and e.get("to_city") == origin_city
+                    else (
+                        f"{e.get('from_city', '')} → {e.get('to_city', '')}"
+                        if e.get("from_city") and e.get("to_city")
+                        else e.get("to_city") or e.get("from_city") or "trayecto"
+                    )
                 ),
                 "departure_time": e.get("time") or "",
                 "estimated_arrival_time": e.get("estimated_arrival_time") or "",
@@ -865,6 +923,69 @@ def _travelers_group_label(count: int) -> str:
     return f"grupo de {count} personas"
 
 
+def _determine_origin_city(passes: list[dict], segments: list[dict] | None = None) -> str | None:
+    """Ciudad de origen del viaje (excluir del contenido).
+
+    Prioriza el primer desplazamiento real por fecha (vuelo -> tren), y
+    usa "from"/origen si viene del PDF o de los segmentos manuales.
+    """
+
+    segments = segments or []
+
+    candidates: list[tuple[date, str, str]] = []
+    for p in passes:
+        fd = p.get("flight_date")
+        if not fd:
+            continue
+        try:
+            d = date.fromisoformat(fd)
+        except (ValueError, TypeError):
+            continue
+        origin_raw = p.get("from")
+        if origin_raw:
+            candidates.append((d, p.get("flight_time") or "00:00", str(origin_raw)))
+
+    if candidates:
+        candidates.sort(key=lambda x: (x[0], x[1]))
+        city = _get_city_name(candidates[0][2])
+        return city or None
+
+    # Fallback: segmentos manuales
+    seg_candidates: list[tuple[date, str]] = []
+    for s in segments:
+        if s.get("type") != "train":
+            continue
+        fd = s.get("date")
+        if not fd:
+            continue
+        try:
+            d = date.fromisoformat(fd)
+        except (ValueError, TypeError):
+            continue
+        origin_raw = s.get("from")
+        if origin_raw:
+            seg_candidates.append((d, str(origin_raw)))
+
+    if seg_candidates:
+        seg_candidates.sort(key=lambda x: x[0])
+        city = _get_city_name(seg_candidates[0][1])
+        return city or None
+
+    # Fallback: primer tren/vuelo con from, ordenado por fecha
+    # (cubre casos donde el barcode Renfe no tiene from pero el PDF sí lo extrajo
+    #  pero flight_date no era parseable, o simplemente hay passes sin fecha)
+    transport = [p for p in passes if p.get("kind") in ("flight", "train") and p.get("from")]
+    if not transport:
+        transport = [p for p in passes if p.get("kind") in ("flight", "train")]
+    if transport:
+        transport_sorted = _sort_by_date(transport)
+        from_city = _get_city_name(transport_sorted[0].get("from", ""))
+        if from_city:
+            return from_city
+
+    return None
+
+
 def _build_itinerary_prompt(
     passes: list[dict],
     segments: list[dict],
@@ -876,10 +997,8 @@ def _build_itinerary_prompt(
 ) -> str:
     """Construye el prompt para DeepSeek a partir del calendario diario calculado."""
 
-    # Determinar ciudad de origen desde el primer vuelo
-    flights = [p for p in passes if p.get("kind") == "flight"]
-    flights_sorted = _sort_by_date(flights)
-    origin_city = _get_city_name(flights_sorted[0].get("from", "")) if flights_sorted else None
+    # Determinar ciudad de origen (vuelo o tren) para excluirla del contenido
+    origin_city = _determine_origin_city(passes, segments)
 
     calendar = _build_daily_calendar(passes, segments, all_dates, origin_city=origin_city)
 
@@ -950,6 +1069,7 @@ Este es el nombre del viaje. El destino PRINCIPAL es {dest_str}.
 Destinos: {dest_str}
 Días totales: {num_days}
 Fechas: {all_dates[0]} → {all_dates[-1]}
+Ciudad de origen (EXCLUIDA del viaje — solo es punto de salida y vuelta): {origin_city or 'N/A'}
 {travelers_block}
 === CALENDARIO BASE (extraído de tus reservas reales) ===
 Este es el esqueleto del viaje. Los eventos marcados como "fijos" son inamovibles
@@ -979,6 +1099,9 @@ A partir del calendario base, genera un JSON con:
 - Nombres propios en idioma local. Descripciones en español.
 - BREVEDAD: cada descripción ≤ 12 palabras. Tips ≤ 8 palabras.
 - daily_itinerary usa EXACTAMENTE las fechas del calendario base (no inventes otras).
+- ⚠️⚠️⚠️ CIUDAD DE ORIGEN "{origin_city}" — PROHIBICIÓN ABSOLUTA. "{origin_city}" NO DEBE APARECER EN ABSOLUTO en ningún texto que generes. "{origin_city}" no existe como destino, no es visitable, no tiene actividad alguna. Los eventos de tren que SALEN de "{origin_city}" ya aparecen en el calendario base. Tú NUNCA debes escribir la palabra "{origin_city}". Si el tren sale de allí, di "Salir hacia la estación con antelación", nunca "Salir de {origin_city}". Ejemplos de lo que NO debes generar: "viaje desde {origin_city}", "salir de {origin_city}", "llegada a {origin_city}", "visitar {origin_city}", ni ninguna frase que contenga "{origin_city}".
+- CIUDADES DE PASO: si el calendario muestra que se llega a una ciudad por la mañana y se sale por la tarde (sin pasar la noche), esa ciudad es SOLO de transbordo. No sugieras hoteles allí y limita las actividades a lo que quepa en el tiempo libre disponible.
+- CIUDADES DESTINO: si se pasa al menos una noche en una ciudad, es destino visitable. Sugiere hoteles, restaurantes y actividades completas para ella.
 - Respeta check-in/check-out: el día de check-out NO sugieras actividades vinculadas a ese hotel.
 - Si un día tiene transporte, NO programes actividades antes de la hora indicada en "RESTRICCIONES DE LLEGADA".
 - Las restricciones de llegada son duras y tienen prioridad sobre los bloques libres.
@@ -1086,30 +1209,67 @@ def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -
     if segments is None:
         segments = []
 
+    origin = _determine_origin_city(passes, segments) or ""
+
     flights = [p for p in passes if p.get("kind") == "flight"]
     trains = [p for p in passes if p.get("kind") == "train"]
     seg_hotels = [s for s in segments if s.get("type") == "hotel"]
 
-    origin = ""
-    if flights:
-        origin = _get_city_name(flights[0].get("from", ""))
-    elif trains:
-        # Ordenar trenes por fecha para detectar correctamente el origen
-        sorted_trains = sorted(
-            [t for t in trains if t.get("flight_date")],
-            key=lambda t: t["flight_date"]
-        )
-        if sorted_trains:
-            origin = _get_city_name(sorted_trains[0].get("from", ""))
-        else:
-            origin = _get_city_name(trains[0].get("from", ""))
+    # Nota: origin se calcula con _determine_origin_city para cubrir trenes
+    # (y casos con origen solo disponible desde los segmentos/PDF).
 
     dests = _real_flight_destinations(flights, seg_hotels, origin)
+
+    # Deduplicar trenes: misma ruta (from→to), misma fecha, mismo tren
+    seen_trains: set[tuple] = set()
+    trains_uniq: list[dict] = []
     for t in trains:
+        key = (t.get("train"), t.get("flight_date"), t.get("flight_time"),
+               _get_city_name(t.get("from", "")), _get_city_name(t.get("to", "")))
+        if key not in seen_trains:
+            seen_trains.add(key)
+            trains_uniq.append(t)
+
+    # Filtrar conexiones de tren: si el siguiente tren sale desde la misma
+    # ciudad QUE LA LLEGADA del actual Y la diferencia horaria es ≤4h,
+    # es conexión (ej: Sevilla→Madrid 07:35 + Madrid→Toledo 11:15).
+    # Si la diferencia es >4h o es otro día, es destino real (ej: el pasajero
+    # pasó el día en Toledo y vuelve 8h después).
+    trains_sorted = _sort_by_date(trains_uniq)
+    def _is_train_real_dest(idx: int) -> bool:
+        t = trains_sorted[idx]
+        to_city = _get_city_name(t.get("to", ""))
+        if not to_city or to_city == origin:
+            return False
+        if idx < len(trains_sorted) - 1:
+            nxt = trains_sorted[idx + 1]
+            # Diferente día → destino real (el pasajero durmió allí)
+            if nxt.get("flight_date") != t.get("flight_date"):
+                return True
+            next_from = _get_city_name(nxt.get("from", ""))
+            if next_from and next_from.lower() == to_city.lower():
+                # Misma ciudad: ¿gap de tiempo corto (conexión) o largo (destino)?
+                t_time = t.get("flight_time", "00:00")
+                n_time = nxt.get("flight_time", "00:00")
+                try:
+                    th, tm = t_time.split(":")
+                    nh, nm = n_time.split(":")
+                    gap = (int(nh)*60+int(nm)) - (int(th)*60+int(tm))
+                    if 0 < gap <= 240:  # ≤4h → conexión
+                        return False
+                except (ValueError, TypeError):
+                    return False  # Sin hora → asumir conexión
+        return True
+
+    print(f"[DEBUG] generate_trip_name: origin={origin!r}, flights={len(flights)}, trains_uniq={len(trains_uniq)}")
+    for i, t in enumerate(trains_sorted):
         city = _get_city_name(t.get("to", ""))
-        if city and city != origin and city not in dests:
-            dests.append(city)
-        elif not city:
+        if city:
+            is_real = _is_train_real_dest(i)
+            print(f"[DEBUG] Train {i}: {t.get('from','?')} -> {t.get('to','?')}  to_city={city!r} is_real={is_real}")
+            if is_real and city not in dests:
+                dests.append(city)
+        else:
             train = t.get("train", "")
             date = t.get("flight_date", "")
             label = f"Tren {train}" if train else "Tren"
@@ -1117,6 +1277,7 @@ def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -
                 label += f" {_format_short_date(date)}"
             if label not in dests:
                 dests.append(label)
+    print(f"[DEBUG] generate_trip_name: dests={dests}")
     for s in seg_hotels:
         city = s.get("city", "")
         if city and city != origin and city not in dests:
@@ -1128,10 +1289,11 @@ def generate_trip_name(passes: list[dict], segments: list[dict] | None = None) -
     if flights:
         return f"Viaje a {_get_city_name(flights[0].get('to',''))}"
     if trains:
-        to_city = _get_city_name(trains[0].get("to", ""))
+        first = trains_sorted[0] if trains_sorted else trains[0]
+        to_city = _get_city_name(first.get("to", ""))
         if to_city:
             return f"Viaje en tren a {to_city}"
-        train_no = trains[0].get("train", "?")
+        train_no = first.get("train", "?")
         return f"Tren {train_no}"
     return "Viaje sin destino"
 
@@ -1207,6 +1369,68 @@ def _parse_json_response(content: str) -> dict:
     }
 
 
+def _strip_origin(obj: dict | list | str, origin: str) -> None:
+    """Elimina cualquier mención de la ciudad de origen de todos los strings
+    en el itinerario generado por el LLM (modifica in-place)."""
+    import re
+    if not origin:
+        return
+    origin_lower = origin.lower()
+    origin_upper = origin.upper()
+    origin_title = origin.title()
+    print(f"[_strip_origin] origin={origin!r}")
+
+    def _clean_text(text: str) -> str:
+        """Reemplaza todas las variantes de origin con string vacío y limpia."""
+        result = text
+        # Reemplazo directo (no regex) para ser más agresivo
+        for variant in [origin, origin_lower, origin_upper, origin_title]:
+            # " Variant" -> " " (con espacio antes)
+            result = result.replace(f' {variant}', ' ')
+            # "Variant " -> " " (con espacio después)
+            result = result.replace(f'{variant} ', ' ')
+            # "Variant." -> "."
+            result = result.replace(f'{variant}.', '.')
+            # "Variant," -> ","
+            result = result.replace(f'{variant},', ',')
+            # "Variant-Madrid" -> "Madrid" (caso compuesto)
+            result = result.replace(f'{variant}-', '')
+            # "-Variant" -> ""
+            result = result.replace(f'-{variant}', '')
+            # "de Variant" -> "de" no, mejor: " en Variant" -> " en "
+            result = result.replace(f' {variant}', ' ')
+        # Limpiar espacios múltiples y puntuación redundante
+        result = re.sub(r'\s{2,}', ' ', result)
+        result = re.sub(r',\s*,', ',', result)
+        result = re.sub(r'^[,\s]+', '', result)
+        result = re.sub(r'[,\s]+$', '', result)
+        result = re.sub(r'\.\s*\.', '.', result)
+        return result.strip()
+
+    def _walk(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if isinstance(v, str):
+                    cleaned = _clean_text(v)
+                    if cleaned != v:
+                        print(f'  [_strip_origin] limpiado {k}: "{v[:60]}" -> "{cleaned[:60]}"')
+                        node[k] = cleaned
+                elif isinstance(v, (dict, list)):
+                    _walk(v)
+        elif isinstance(node, list):
+            for i, item in enumerate(node):
+                if isinstance(item, str):
+                    cleaned = _clean_text(item)
+                    if cleaned != item:
+                        print(f'  [_strip_origin] limpiado[{i}]: "{item[:60]}" -> "{cleaned[:60]}"')
+                        node[i] = cleaned
+                else:
+                    _walk(item)
+
+    _walk(obj)
+    print(f"[_strip_origin] done")
+
+
 def _build_basic_itinerary(
     passes: list[dict],
     segments: list[dict],
@@ -1220,10 +1444,8 @@ def _build_basic_itinerary(
     Contiene solo los eventos fijos extraídos de pases y segmentos, sin
     sugerencias de restaurantes, lugares de interés ni notas culturales.
     """
-    # Determinar origen desde el primer vuelo
-    flights = [p for p in passes if p.get("kind") == "flight"]
-    flights_sorted = _sort_by_date(flights)
-    origin_city = _get_city_name(flights_sorted[0].get("from", "")) if flights_sorted else None
+    # Determinar origen (vuelo o tren) para excluirlo del contenido
+    origin_city = _determine_origin_city(passes, segments)
 
     calendar = _build_daily_calendar(passes, segments, all_dates, origin_city=origin_city)
 
@@ -1465,6 +1687,20 @@ async def generate_itinerary(
     # 3. Parsear JSON con limpieza robusta
     itinerary = _parse_json_response(content)
 
+    # Post-procesado: eliminar cualquier mención de la ciudad de origen de todos los strings
+    origin_city_post = _determine_origin_city(passes, segments) or ""
+    print(f"[strip_origin] origin_city_post={origin_city_post!r}")
+    if origin_city_post:
+        # Buscar antes
+        full_before = json.dumps(itinerary, ensure_ascii=False)
+        has_origin_before = origin_city_post.lower() in full_before.lower()
+        print(f"[strip_origin] has_origin_before={has_origin_before}")
+        _strip_origin(itinerary, origin_city_post)
+        # Buscar despues
+        full_after = json.dumps(itinerary, ensure_ascii=False)
+        has_origin_after = origin_city_post.lower() in full_after.lower()
+        print(f"[strip_origin] has_origin_after={has_origin_after}")
+
     # Añadir clima al resultado
     itinerary["weather"] = weather
 
@@ -1526,9 +1762,8 @@ def expand_section(
     if segments is None:
         segments = []
 
-    flights = [p for p in passes if p.get("kind") == "flight"]
-    flights_sorted = _sort_by_date(flights)
-    origin_city = _get_city_name(flights_sorted[0].get("from", "")) if flights_sorted else None
+    # Determinar origen (vuelo o tren) para excluirlo del contenido
+    origin_city = _determine_origin_city(passes, segments)
 
     all_dates_set = set()
     for p in passes:
@@ -1646,6 +1881,11 @@ YA RECOMENDADO ({sec['section_name']}):
 {sec['existing']}
 
 {sec['instruction']}
+
+REGLAS ADICIONALES:
+- PROHIBICIÓN ABSOLUTA: NO menciones "{origin_city or 'N/A'}" en ningún campo generado (descripciones, tips, recordatorios, nombres, ni texto alguno).
+- Si una ciudad es solo de paso (llegada y salida el mismo día sin pasar noche), no sugieras hoteles allí.
+- Las ciudades donde se pasa al menos una noche son destino: sugiere lo mejor de ellas.
 
 Estructura esperada del JSON:
 {sec['output_schema']}
