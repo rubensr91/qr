@@ -620,7 +620,7 @@ def _build_daily_calendar(
             "estimated_arrival_time": _est_arrival,
             "no_activities_before_minute": arrival_guard_min,
             "no_activities_before": _format_minutes_to_time(arrival_guard_min),
-            "description": f"Llegada a {to_city} a las {_est_arrival}" if _est_arrival else f"Llegada a {to_city}",
+            "description": f"Vuelo desde {from_city} a las {flight_time} → Llegada a {to_city} a las {_est_arrival}" if flight_time and _est_arrival else f"Llegada a {to_city}",
             "city": to_city,
         })
 
@@ -657,7 +657,7 @@ def _build_daily_calendar(
             "estimated_arrival_time": _est_arrival,
             "no_activities_before_minute": arrival_guard_min,
             "no_activities_before": _format_minutes_to_time(arrival_guard_min),
-            "description": f"Llegada a {to_city} a las {_est_arrival}" if _est_arrival else f"Llegada a {to_city}",
+            "description": f"Tren desde {from_city} a las {time_str} → Llegada a {to_city} a las {_est_arrival}" if time_str and _est_arrival else f"Llegada a {to_city}",
             "city": to_city,
         })
 
@@ -676,17 +676,19 @@ def _build_daily_calendar(
         arrival_guard_min = _parse_time_to_minutes(s.get("time", "") or "")
         if arrival_guard_min is not None:
             arrival_guard_min += duration_min
+        _seg_time = s.get("time", "") or ""
+        _seg_est = _format_minutes_to_time(arrival_guard_min)
         days[fd]["events"].append({
             "type": "flight_arrival",
             "transport_kind": "flight",
-            "time": s.get("time", "") or "",
+            "time": _seg_time,
             "from_city": from_city,
             "to_city": to_city,
             "estimated_duration_min": duration_min,
-            "estimated_arrival_time": _format_minutes_to_time(arrival_guard_min),
+            "estimated_arrival_time": _seg_est,
             "no_activities_before_minute": arrival_guard_min,
             "no_activities_before": _format_minutes_to_time(arrival_guard_min),
-            "description": f"Llegada {airline}{flight_no}{' desde ' + from_city if from_city and from_city != origin_city else ''}",
+            "description": f"Vuelo desde {from_city} a las {_seg_time} → Llegada a {to_city} a las {_seg_est}" if _seg_time and _seg_est else f"Llegada a {to_city}",
             "city": to_city,
         })
 
@@ -705,17 +707,19 @@ def _build_daily_calendar(
         arrival_guard_min = _parse_time_to_minutes(s.get("time", "") or "")
         if arrival_guard_min is not None:
             arrival_guard_min += duration_min
+        _seg_time = s.get("time", "") or ""
+        _seg_est = _format_minutes_to_time(arrival_guard_min)
         days[fd]["events"].append({
             "type": "train_arrival",
             "transport_kind": "train",
-            "time": s.get("time", "") or "",
+            "time": _seg_time,
             "from_city": from_city,
             "to_city": to_city,
             "estimated_duration_min": duration_min,
-            "estimated_arrival_time": _format_minutes_to_time(arrival_guard_min),
+            "estimated_arrival_time": _seg_est,
             "no_activities_before_minute": arrival_guard_min,
             "no_activities_before": _format_minutes_to_time(arrival_guard_min),
-            "description": f"Llegada {op} {train_no}{' desde ' + from_city if from_city and from_city != origin_city else ''}",
+            "description": f"Tren desde {from_city} a las {_seg_time} → Llegada a {to_city} a las {_seg_est}" if _seg_time and _seg_est else f"Llegada a {to_city}",
             "city": to_city,
         })
 
