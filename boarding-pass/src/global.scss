@@ -33,8 +33,8 @@
  */
 
 /* @import "@ionic/angular/css/palettes/dark.always.css"; */
-/* @import "@ionic/angular/css/palettes/dark.class.css"; */
-@import "@ionic/angular/css/palettes/dark.system.css";
+@import "@ionic/angular/css/palettes/dark.class.css";
+// dark.system.css NO: queremos control manual, no automatico por OS
 
 /* =========================================================
    EDITORIAL TRAVEL THEME — global tokens
@@ -132,23 +132,21 @@
   --ion-border-color:         var(--paper-line);
 }
 
-// ---- Dark mode (system) ----
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper:        #0e1419;
-    --paper-soft:   #1a2128;
-    --paper-line:   #2a323b;
-    --navy:         #e6e8ef;
-    --navy-soft:    #b8c0cc;
-    --navy-muted:   #9aa3b2;
-    --teal-soft:    #1a3839;
-    --coral-soft:   #3d1d19;
-    --amber-soft:   #3d2e0e;
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.2);
-    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.25);
-    --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
-    --glass-bg: rgba(14, 20, 25, 0.75);
-  }
+// ---- Dark mode (class-based, toggle manual) ----
+html.dark {
+  --paper:        #0e1419;
+  --paper-soft:   #1a2128;
+  --paper-line:   #2a323b;
+  --navy:         #e6e8ef;
+  --navy-soft:    #b8c0cc;
+  --navy-muted:   #9aa3b2;
+  --teal-soft:    #1a3839;
+  --coral-soft:   #3d1d19;
+  --amber-soft:   #3d2e0e;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.2);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.25);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --glass-bg: rgba(14, 20, 25, 0.75);
 }
 
 // ---- Global editorial typography ----

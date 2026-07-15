@@ -1,3 +1,7 @@
 <ion-app>
   <ion-router-outlet></ion-router-outlet>
+
+  <button class="dark-toggle" (click)="toggleDark()">
+    <ion-icon [name]="isDark ? 'sunny-outline' : 'moon-outline'"></ion-icon>
+  </button>
 </ion-app>

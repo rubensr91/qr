@@ -1,0 +1,29 @@
+.dark-toggle {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--paper-line);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur) var(--ease);
+  padding: 0;
+  color: var(--navy);
+  font-size: 1.2rem;
+}
+.dark-toggle:hover {
+  transform: scale(1.08);
+  box-shadow: var(--shadow-3);
+}
+.dark-toggle:active {
+  transform: scale(0.95);
+}
