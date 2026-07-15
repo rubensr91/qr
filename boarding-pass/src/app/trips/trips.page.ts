@@ -324,6 +324,21 @@ export class TripsPage {
       }
       cities.push(u.to);
     }
+
+    // Si es viaje redondo (vuelta al origen), mostrar solo ciudades únicas
+    // ej: Sevilla→Madrid→Toledo→Madrid→Sevilla → Sevilla→Madrid→Toledo
+    if (cities.length >= 3 && cities[0] === cities[cities.length - 1]) {
+      const seen = new Set<string>();
+      const deduped: string[] = [];
+      for (const c of cities) {
+        if (!seen.has(c)) {
+          seen.add(c);
+          deduped.push(c);
+        }
+      }
+      return deduped.join(' → ');
+    }
+
     return cities.join(' → ');
   }
 
