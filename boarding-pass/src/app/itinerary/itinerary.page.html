@@ -10,7 +10,7 @@
 </ion-header>
 
 <ion-content>
-  <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
+  <div class="swipe-wrap" (touchstart)="onTouchStart($event)" (touchend)="onTouchEnd($event)"><ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
     <ion-refresher-content></ion-refresher-content>
   </ion-refresher>
 
@@ -551,7 +551,8 @@
         <ion-icon name="close-circle" size="large"></ion-icon>
       </ion-button>
     </div>
-  </div>
+  </div>  </div>
+
 </ion-content>
 
 <!-- Generating overlay -->

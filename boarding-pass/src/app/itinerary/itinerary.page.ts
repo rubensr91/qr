@@ -574,6 +574,26 @@ export class ItineraryPage {
     await t.present();
   }
 
+  private touchStartX = 0;
+
+  onTouchStart(e: TouchEvent) {
+    this.touchStartX = e.touches[0].clientX;
+  }
+
+  onTouchEnd(e: TouchEvent) {
+    const dx = e.changedTouches[0].clientX - this.touchStartX;
+    if (Math.abs(dx) < 60) return; // umbral
+    const tabs = ['plan', 'cards', 'eat', 'sleep', 'visit', 'tips', 'quiz']
+      .filter(t => {
+        if (t === 'sleep' && this.isSameDayTrip()) return false;
+        if (t === 'plan' || t === 'cards' || t === 'quiz') return true;
+        return !!this.itinerary;
+      });
+    const idx = tabs.indexOf(this.activeTab);
+    if (dx > 0 && idx > 0) this.activeTab = tabs[idx - 1] as any; // swipe derecha
+    else if (dx < 0 && idx < tabs.length - 1) this.activeTab = tabs[idx + 1] as any; // swipe izquierda
+  }
+
   /** True si todos los pases son el mismo dia (viaje sin noche). */
   isSameDayTrip(): boolean {
     const dates = this.passes.map(p => p.flight_date).filter(d => !!d);
