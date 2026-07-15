@@ -46,6 +46,7 @@ export interface Trip {
   session_id: string;
   filename: string;
   trip_name?: string;
+  route?: string;
   pass_data: { passes: Pass[]; images: BarcodeImage[] };
   segments?: TravelSegment[];
   created_at: string;
@@ -89,6 +90,7 @@ export interface SaveTripResponse {
   session_id: string;
   filename: string;
   trip_name?: string;
+  route?: string;
   message: string;
 }
 

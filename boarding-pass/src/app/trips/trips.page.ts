@@ -287,70 +287,9 @@ export class TripsPage {
     return '—';
   }
 
-  /** Ruta completa: origen → destino → destino → ...
-   *  Deduplica pasajeros (misma ruta, mismo tren/vuelo, misma hora). */
+  /** Ruta completa desde backend: 'Sevilla → Madrid → Toledo' */
   getRoute(trip: Trip): string {
-    const passes = [...(trip.pass_data.passes || [])];
-    if (!passes.length) return '—';
-
-    // Normalizar nombre de ciudad (ej: 'MADRID P.ATOCHA' → 'Madrid')
-    const cityAliases: Record<string, string> = {
-      'MADRID P.ATOCHA': 'Madrid', 'MADRID ATOCHA': 'Madrid',
-      'MADRID CHAMARTIN': 'Madrid', 'MADRID PUERTA DE ATOCHA': 'Madrid',
-      'MADRID': 'Madrid',
-    };
-    const normalizeCity = (raw: string | undefined): string => {
-      if (!raw) return '';
-      const up = raw.trim().toUpperCase();
-      if (cityAliases[up]) return cityAliases[up];
-      // 'Sevilla - Santa Justa' → 'Sevilla'
-      if (raw.includes(' - ')) return raw.split(' - ')[0].trim();
-      // Todo mayúsculas → normalizar: 'TOLEDO' → 'Toledo'
-      if (raw === up) return raw.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-      return raw.trim();
-    };
-
-    // Ordenar por fecha y hora
-    passes.sort((a, b) => {
-      const da = a.flight_date || '';
-      const db = b.flight_date || '';
-      if (da !== db) return da < db ? -1 : 1;
-      const ta = a.flight_time || '';
-      const tb = b.flight_time || '';
-      return ta < tb ? -1 : ta > tb ? 1 : 0;
-    });
-
-    // Deduplicar misma ruta (mismo tren/vuelo, misma fecha-hora, mismo from→to)
-    const seen = new Set<string>();
-    const unique: { from: string; to: string }[] = [];
-    for (const p of passes) {
-      const from = normalizeCity(p.from);
-      const to = normalizeCity(p.to);
-      const key = `${p.flight_date}|${p.flight_time}|${from}|${to}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      unique.push({ from, to });
-    }
-
-    // Construir ruta
-    if (!unique.length) return '—';
-    const cities: string[] = [];
-    for (const u of unique) {
-      if (!cities.length || cities[cities.length - 1] !== u.from) {
-        cities.push(u.from);
-      }
-      cities.push(u.to);
-    }
-
-    // Viaje redondo: solo ciudades únicas (sin vuelta)
-    if (cities.length >= 3 && cities[0] === cities[cities.length - 1]) {
-      const s = new Set<string>();
-      const d: string[] = [];
-      for (const c of cities) { if (!s.has(c)) { s.add(c); d.push(c); } }
-      return d.join(' → ');
-    }
-
-    return cities.join(' → ');
+    return trip.route || '—';
   }
   }
 

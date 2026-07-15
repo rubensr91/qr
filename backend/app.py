@@ -424,12 +424,14 @@ def list_trips(request: Request, x_session_id: str = Header(default="")):
 
     trips = []
     for r in rows:
+        pd = json.loads(r["pass_data"])
         trips.append({
             "id": r["id"],
             "session_id": r["session_id"],
             "filename": r["filename"],
             "trip_name": r["trip_name"] or "",
-            "pass_data": json.loads(r["pass_data"]),
+            "route": _compute_route(pd.get("passes", [])),
+            "pass_data": pd,
             "segments": json.loads(r["segments"] or "[]"),
             "created_at": r["created_at"],
             "updated_at": r["updated_at"],
@@ -502,6 +504,7 @@ async def create_trip(request: Request, x_session_id: str = Header(default="")):
                 "session_id": sid,
                 "filename": filename,
                 "trip_name": trip_name,
+                "route": _compute_route(passes),
                 "message": "Este viaje ya estaba guardado, sin cambios",
             }
 
@@ -517,6 +520,7 @@ async def create_trip(request: Request, x_session_id: str = Header(default="")):
             "id": existing["id"],
             "session_id": sid,
             "filename": filename,
+            "route": _compute_route(passes),
             "message": "Viaje actualizado con nuevos datos",
         }
 
@@ -536,6 +540,7 @@ async def create_trip(request: Request, x_session_id: str = Header(default="")):
         "session_id": sid,
         "filename": filename,
         "trip_name": trip_name,
+        "route": _compute_route(passes),
         "message": "Viaje guardado",
     }
 
@@ -852,3 +857,65 @@ def _get_session_id_via_header(request: Request, header_value: str) -> str:
     if not sid:
         sid = f"ses_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
     return sid
+
+
+# --- Route computation -------------------------------------------------------
+
+_SPANISH_ALIASES: dict[str, str] = {
+    "MADRID P.ATOCHA": "Madrid", "MADRID ATOCHA": "Madrid",
+    "MADRID CHAMARTIN": "Madrid", "MADRID PUERTA DE ATOCHA": "Madrid",
+    "MADRID": "Madrid",
+}
+
+def _normalize_city(raw: str) -> str:
+    if not raw:
+        return ""
+    up = raw.strip().upper()
+    if up in _SPANISH_ALIASES:
+        return _SPANISH_ALIASES[up]
+    if " - " in raw:
+        return raw.split(" - ")[0].strip()
+    # Todo mayusculas -> title case
+    if raw.strip().isupper():
+        return raw.strip().title()
+    return raw.strip()
+
+def _compute_route(passes: list[dict]) -> str:
+    """Construye ruta: 'Origen → Destino → Destino...' con normalización."""
+    if not passes:
+        return "—"
+
+    # Ordenar por fecha y hora
+    sorted_passes = sorted(passes, key=lambda p: (p.get("flight_date", "") or "", p.get("flight_time", "") or ""))
+
+    # Deduplicar misma ruta
+    seen: set[tuple] = set()
+    unique: list[tuple[str, str]] = []
+    for p in sorted_passes:
+        frm = _normalize_city(p.get("from", ""))
+        to = _normalize_city(p.get("to", ""))
+        key = (p.get("flight_date"), p.get("flight_time"), frm, to)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append((frm, to))
+
+    if not unique:
+        return "—"
+
+    # Construir cadena de ciudades
+    cities: list[str] = []
+    for frm, to in unique:
+        if not cities or cities[-1] != frm:
+            cities.append(frm)
+        cities.append(to)
+
+    # Viaje redondo -> solo ciudades únicas
+    if len(cities) >= 3 and cities[0] == cities[-1]:
+        deduped: list[str] = []
+        for c in cities:
+            if c not in deduped:
+                deduped.append(c)
+        return " → ".join(deduped)
+
+    return " → ".join(cities)
