@@ -287,6 +287,46 @@ export class TripsPage {
     return '—';
   }
 
+  /** Ruta completa: origen → destino → destino → ...
+   *  Deduplica pasajeros (misma ruta, mismo tren/vuelo, misma hora). */
+  getRoute(trip: Trip): string {
+    const passes = [...(trip.pass_data.passes || [])];
+    if (!passes.length) return '—';
+
+    // Ordenar por fecha y hora
+    passes.sort((a, b) => {
+      const da = a.flight_date || '';
+      const db = b.flight_date || '';
+      if (da !== db) return da < db ? -1 : 1;
+      const ta = a.flight_time || '';
+      const tb = b.flight_time || '';
+      return ta < tb ? -1 : ta > tb ? 1 : 0;
+    });
+
+    // Deduplicar misma ruta (mismo tren/vuelo, misma fecha-hora, mismo from→to)
+    const seen = new Set<string>();
+    const unique: { from: string; to: string }[] = [];
+    for (const p of passes) {
+      const from = (p.from || '').replace(/ - .*$/, '').trim();
+      const to = (p.to || '').replace(/ - .*$/, '').trim();
+      const key = `${p.flight_date}|${p.flight_time}|${from}|${to}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push({ from, to });
+    }
+
+    // Construir ruta: origen + todos los destinos
+    if (!unique.length) return '—';
+    const cities: string[] = [];
+    for (const u of unique) {
+      if (!cities.length || cities[cities.length - 1] !== u.from) {
+        cities.push(u.from);
+      }
+      cities.push(u.to);
+    }
+    return cities.join(' → ');
+  }
+
   private async toast(msg: string, color: string) {
     const t = await this.toastCtrl.create({ message: msg, duration: 3000, color });
     await t.present();

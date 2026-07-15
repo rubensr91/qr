@@ -49,12 +49,8 @@
          (click)="viewTrip(trip)">
 
       <div class="trip-card__head">
-        <div class="trip-card__title-block">
-          <span class="board-code board-code--md">{{ getOriginCode(trip) }}</span>
-          <div class="flight-strip__line">
-            <ion-icon [name]="tripModeIcon(trip)" class="trip-card__strip-icon"></ion-icon>
-          </div>
-          <span class="board-code board-code--md">{{ getDestCode(trip) }}</span>
+        <div class="trip-card__route">
+          <span class="route-text">{{ getRoute(trip) }}</span>
         </div>
         <h3 class="trip-card__name">{{ trip.trip_name || trip.filename }}</h3>
         <span class="trip-card__date" *ngIf="tripDateRange(trip) as dr">{{ dr }}</span>
