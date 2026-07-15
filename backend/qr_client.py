@@ -60,6 +60,7 @@ def _ocr_flight_time(image_path: str) -> dict[str, str | None]:
         return {"flight_time": None, "gate_close_time": None}
 
     lines = [l.strip() for l in text.split('\n') if l.strip()]
+    print(f"[ocr] Texto extraido ({len(lines)} lineas): {' | '.join(l[:50] for l in lines[:8])}", file=sys.stderr, flush=True)
 
     flight_time: str | None = None
     gate_close_time: str | None = None
@@ -67,8 +68,9 @@ def _ocr_flight_time(image_path: str) -> dict[str, str | None]:
     time_re = re.compile(r"(\d{1,2})[:.](\d{2})")
 
     for i, line in enumerate(lines):
-        has_salida = 'salida' in line.lower()
-        has_puerta = 'puerta' in line.lower()
+        has_salida = any(w in line.lower() for w in ('salida', 'depart', 'boarding', 'departs', 'departure'))
+        has_puerta = any(w in line.lower() for w in ('puerta', 'gate', 'cierra', 'closes', 'boarding', 'closing'))
+        print(f"[ocr] L{i}: salida={has_salida} puerta={has_puerta} {line[:70]!r}", file=sys.stderr, flush=True)
 
         if not (has_salida or has_puerta):
             continue
@@ -101,19 +103,18 @@ def _ocr_flight_time(image_path: str) -> dict[str, str | None]:
             hh, mm = int(m.group(1)), int(m.group(2))
             if 0 <= hh <= 23 and 0 <= mm <= 59:
                 all_times.append(f"{hh:02d}:{mm:02d}")
+        print(f"[ocr] fallback all_times={all_times}", file=sys.stderr, flush=True)
 
-        seen = set()
-        unique_times = []
-        for t in all_times:
-            if t not in seen:
-                seen.add(t)
-                unique_times.append(t)
+        if flight_time is None and all_times:
+            flight_time = all_times[0]
+        if gate_close_time is None:
+            # Buscar el primer tiempo DISTINTO a flight_time
+            for t in all_times:
+                if t != flight_time:
+                    gate_close_time = t
+                    break
 
-        if flight_time is None and len(unique_times) > 0:
-            flight_time = unique_times[0]
-        if gate_close_time is None and len(unique_times) > 1:
-            gate_close_time = unique_times[1]
-
+    print(f"[ocr] final: flight={flight_time!r} gate={gate_close_time!r}", file=sys.stderr, flush=True)
     return {"flight_time": flight_time, "gate_close_time": gate_close_time}
 
 
