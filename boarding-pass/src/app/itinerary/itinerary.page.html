@@ -93,7 +93,7 @@
         <ion-icon name="restaurant-outline"></ion-icon>
         <ion-label>Comer</ion-label>
       </ion-segment-button>
-      <ion-segment-button value="sleep" *ngIf="itinerary">
+      <ion-segment-button value="sleep" *ngIf="itinerary && !isSameDayTrip()">
         <ion-icon name="bed-outline"></ion-icon>
         <ion-label>Dormir</ion-label>
       </ion-segment-button>
@@ -319,7 +319,7 @@
     </div>
 
     <!-- HOTELES -->
-    <div class="section" *ngIf="activeTab === 'sleep'">
+    <div class="section" *ngIf="activeTab === 'sleep' && !isSameDayTrip()">
       <ion-card class="rec-card" *ngFor="let h of itinerary?.hotels">
         <ion-card-header>
           <ion-card-title>{{ h.name }}</ion-card-title>

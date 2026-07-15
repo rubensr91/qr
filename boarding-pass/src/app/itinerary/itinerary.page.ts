@@ -574,6 +574,13 @@ export class ItineraryPage {
     await t.present();
   }
 
+  /** True si todos los pases son el mismo dia (viaje sin noche). */
+  isSameDayTrip(): boolean {
+    const dates = this.passes.map(p => p.flight_date).filter(d => !!d);
+    if (dates.length < 2) return false;
+    return new Set(dates).size === 1;
+  }
+
   private _showValidation(v?: { is_valid: boolean; errors: string[]; warnings: string[] }): void {
     if (!v) return;
     const all = [...(v.errors || []), ...(v.warnings || [])];
