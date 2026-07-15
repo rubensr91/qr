@@ -4,6 +4,15 @@
   will-change: transform;
 }
 
+// Animación de entrada para secciones al cambiar de tab
+.section {
+  animation: fadeSlideIn 0.25s ease-out;
+}
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 // --- State containers ---
 .state-container {
   text-align: center;
