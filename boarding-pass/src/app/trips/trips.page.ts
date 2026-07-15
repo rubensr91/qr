@@ -293,6 +293,23 @@ export class TripsPage {
     const passes = [...(trip.pass_data.passes || [])];
     if (!passes.length) return '—';
 
+    // Normalizar nombre de ciudad (ej: 'MADRID P.ATOCHA' → 'Madrid')
+    const cityAliases: Record<string, string> = {
+      'MADRID P.ATOCHA': 'Madrid', 'MADRID ATOCHA': 'Madrid',
+      'MADRID CHAMARTIN': 'Madrid', 'MADRID PUERTA DE ATOCHA': 'Madrid',
+      'MADRID': 'Madrid',
+    };
+    const normalizeCity = (raw: string | undefined): string => {
+      if (!raw) return '';
+      const up = raw.trim().toUpperCase();
+      if (cityAliases[up]) return cityAliases[up];
+      // 'Sevilla - Santa Justa' → 'Sevilla'
+      if (raw.includes(' - ')) return raw.split(' - ')[0].trim();
+      // Todo mayúsculas → normalizar: 'TOLEDO' → 'Toledo'
+      if (raw === up) return raw.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+      return raw.trim();
+    };
+
     // Ordenar por fecha y hora
     passes.sort((a, b) => {
       const da = a.flight_date || '';
@@ -307,15 +324,15 @@ export class TripsPage {
     const seen = new Set<string>();
     const unique: { from: string; to: string }[] = [];
     for (const p of passes) {
-      const from = (p.from || '').replace(/ - .*$/, '').trim();
-      const to = (p.to || '').replace(/ - .*$/, '').trim();
+      const from = normalizeCity(p.from);
+      const to = normalizeCity(p.to);
       const key = `${p.flight_date}|${p.flight_time}|${from}|${to}`;
       if (seen.has(key)) continue;
       seen.add(key);
       unique.push({ from, to });
     }
 
-    // Construir ruta: origen + todos los destinos
+    // Construir ruta
     if (!unique.length) return '—';
     const cities: string[] = [];
     for (const u of unique) {
@@ -325,21 +342,16 @@ export class TripsPage {
       cities.push(u.to);
     }
 
-    // Si es viaje redondo (vuelta al origen), mostrar solo ciudades únicas
-    // ej: Sevilla→Madrid→Toledo→Madrid→Sevilla → Sevilla→Madrid→Toledo
+    // Viaje redondo: solo ciudades únicas (sin vuelta)
     if (cities.length >= 3 && cities[0] === cities[cities.length - 1]) {
-      const seen = new Set<string>();
-      const deduped: string[] = [];
-      for (const c of cities) {
-        if (!seen.has(c)) {
-          seen.add(c);
-          deduped.push(c);
-        }
-      }
-      return deduped.join(' → ');
+      const s = new Set<string>();
+      const d: string[] = [];
+      for (const c of cities) { if (!s.has(c)) { s.add(c); d.push(c); } }
+      return d.join(' → ');
     }
 
     return cities.join(' → ');
+  }
   }
 
   private async toast(msg: string, color: string) {
