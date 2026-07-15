@@ -138,6 +138,8 @@ export class ItineraryPage {
   generating = false;
   error = '';
   activeTab: 'plan' | 'cards' | 'bookings' | 'eat' | 'sleep' | 'visit' | 'tips' | 'quiz' = 'plan';
+  swipeOffset = 0;
+  swipeTransition = false;
 
   enlargedBarcode: BarcodeImage | null = null;
   private previousBrightness: number | undefined;
@@ -578,11 +580,17 @@ export class ItineraryPage {
 
   onTouchStart(e: TouchEvent) {
     this.touchStartX = e.touches[0].clientX;
+    this.swipeTransition = false;
+    this.swipeOffset = 0;
+  }
+
+  onTouchMove(e: TouchEvent) {
+    const dx = e.touches[0].clientX - this.touchStartX;
+    this.swipeOffset = dx;
   }
 
   onTouchEnd(e: TouchEvent) {
     const dx = e.changedTouches[0].clientX - this.touchStartX;
-    if (Math.abs(dx) < 60) return; // umbral
     const tabs = ['plan', 'cards', 'eat', 'sleep', 'visit', 'tips', 'quiz']
       .filter(t => {
         if (t === 'sleep' && this.isSameDayTrip()) return false;
@@ -590,8 +598,15 @@ export class ItineraryPage {
         return !!this.itinerary;
       });
     const idx = tabs.indexOf(this.activeTab);
-    if (dx > 0 && idx > 0) this.activeTab = tabs[idx - 1] as any; // swipe derecha
-    else if (dx < 0 && idx < tabs.length - 1) this.activeTab = tabs[idx + 1] as any; // swipe izquierda
+    let target = this.activeTab;
+    if (Math.abs(dx) >= 60) {
+      if (dx > 0 && idx > 0) target = tabs[idx - 1] as any;
+      else if (dx < 0 && idx < tabs.length - 1) target = tabs[idx + 1] as any;
+    }
+    // Snap animado
+    this.swipeTransition = true;
+    this.swipeOffset = 0;
+    this.activeTab = target as any;
   }
 
   /** True si todos los pases son el mismo dia (viaje sin noche). */

@@ -1,3 +1,9 @@
+// --- Swipe carousel ---
+.swipe-wrap {
+  overflow: hidden;
+  will-change: transform;
+}
+
 // --- State containers ---
 .state-container {
   text-align: center;

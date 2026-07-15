@@ -10,7 +10,9 @@
 </ion-header>
 
 <ion-content>
-  <div class="swipe-wrap" (touchstart)="onTouchStart($event)" (touchend)="onTouchEnd($event)"><ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
+  <div class="swipe-wrap" (touchstart)="onTouchStart($event)" (touchmove)="onTouchMove($event)" (touchend)="onTouchEnd($event)"
+       [style.transform]="'translateX(' + swipeOffset + 'px)'"
+       [style.transition]="swipeTransition ? 'transform 0.3s cubic-bezier(0.2,0,0,1)' : 'none'"><ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
     <ion-refresher-content></ion-refresher-content>
   </ion-refresher>
 
