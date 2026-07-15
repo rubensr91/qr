@@ -93,9 +93,15 @@ def _ocr_flight_time(image_path: str) -> dict[str, str | None]:
         if has_salida and len(times) > 0 and flight_time is None:
             flight_time = times[0]
         if has_puerta and len(times) > 1 and gate_close_time is None:
-            gate_close_time = times[1]
+            # times[1] debe ser distinto a flight_time
+            gt = times[1]
+            if flight_time is None or gt != flight_time:
+                gate_close_time = gt
         elif has_puerta and len(times) == 1 and gate_close_time is None:
-            gate_close_time = times[0]
+            # Solo si es distinta a flight_time (misma linea salida+puerta)
+            gt = times[0]
+            if flight_time is None or gt != flight_time:
+                gate_close_time = gt
 
     if flight_time is None or gate_close_time is None:
         all_times = []

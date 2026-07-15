@@ -291,6 +291,40 @@ export class TripsPage {
   getRoute(trip: Trip): string {
     return trip.route || '—';
   }
+
+  /** Segmentos de ruta con icono de transporte para cada tramo. */
+  getRouteSegments(trip: Trip): { from: string; to: string; icon: string }[] {
+    const passes = trip.pass_data?.passes || [];
+    if (!passes.length || !trip.route) return [];
+
+    const alias: Record<string, string> = {
+      'MADRID P.ATOCHA': 'Madrid', 'MADRID ATOCHA': 'Madrid',
+      'MADRID CHAMARTIN': 'Madrid', 'MADRID PUERTA DE ATOCHA': 'Madrid',
+      'MADRID': 'Madrid',
+    };
+    const norm = (raw: string | undefined): string => {
+      if (!raw) return '';
+      const up = raw.trim().toUpperCase();
+      if (alias[up]) return alias[up];
+      if (raw.includes(' - ')) return raw.split(' - ')[0].trim();
+      if (raw === up) return raw.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase());
+      return raw.trim();
+    };
+
+    const cities = trip.route.split(' → ').map(c => c.trim());
+    const segments: { from: string; to: string; icon: string }[] = [];
+
+    for (let i = 0; i < cities.length - 1; i++) {
+      const from = cities[i];
+      const to = cities[i + 1];
+      const pass = passes.find(p => norm(p.from) === from && norm(p.to) === to);
+      segments.push({
+        from,
+        to,
+        icon: pass?.kind === 'train' ? 'train-outline' : 'airplane-outline',
+      });
+    }
+    return segments;
   }
 
   private async toast(msg: string, color: string) {

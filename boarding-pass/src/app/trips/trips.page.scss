@@ -58,7 +58,8 @@
 .trip-card__route {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  gap: 1px 0;
   margin-bottom: var(--space-2);
   min-width: 0;
 }
@@ -72,6 +73,18 @@
   -webkit-overflow-scrolling: touch;
   padding-bottom: 2px;
   &::-webkit-scrollbar { display: none; }
+}
+.route-city {
+  font-size: var(--fs-small);
+  color: var(--navy-soft);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.route-icon {
+  font-size: 1rem;
+  color: var(--coral);
+  flex-shrink: 0;
+  margin: 0 2px;
 }
 @media (max-width: 480px) {
   .route-text {

@@ -299,7 +299,7 @@ async def extract(file: UploadFile = File(...)):
         if is_image and ocr_data:
             if ocr_data.get("flight_time") and not parsed.get("flight_time"):
                 parsed["flight_time"] = ocr_data["flight_time"]
-            if ocr_data.get("gate_close_time"):
+            if ocr_data.get("gate_close_time") and ocr_data["gate_close_time"] != parsed.get("flight_time"):
                 parsed["gate_close_time"] = ocr_data["gate_close_time"]
         # Validacion completa: descartar si faltan datos esenciales
         ok, motivo = _is_pass_complete(parsed)
@@ -466,6 +466,9 @@ async def create_trip(request: Request, x_session_id: str = Header(default="")):
                 status_code=400,
                 detail=f"Pase incompleto rechazado: {motivo}. Re-subir el archivo desde la home.",
             )
+
+    # Inferir años con TODOS los pases juntos (cubre rollover DOY 365→002)
+    infer_years(passes)
 
     # Auto-generar nombre si no se proporciono
     if not trip_name:

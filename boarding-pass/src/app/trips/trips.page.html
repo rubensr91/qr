@@ -50,7 +50,11 @@
 
       <div class="trip-card__head">
         <div class="trip-card__route">
-          <span class="route-text">{{ getRoute(trip) }}</span>
+          <ng-container *ngFor="let seg of getRouteSegments(trip); let last = last">
+            <span class="route-city">{{ seg.from }}</span>
+            <ion-icon [name]="seg.icon" class="route-icon"></ion-icon>
+            <span class="route-city" *ngIf="last">{{ seg.to }}</span>
+          </ng-container>
         </div>
         <h3 class="trip-card__name">{{ trip.trip_name || trip.filename }}</h3>
         <span class="trip-card__date" *ngIf="tripDateRange(trip) as dr">{{ dr }}</span>
