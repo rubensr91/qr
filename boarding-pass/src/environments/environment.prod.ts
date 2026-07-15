@@ -1,1 +1,1 @@
-export const environment = { production: true, apiUrl: "https://separately-cpu-tiles-move.trycloudflare.com" };
+export const environment = { production: true, apiUrl: "https://fascinating-tex-red-eos.trycloudflare.com" };
