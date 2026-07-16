@@ -23,7 +23,9 @@ from content_validator import validate_itinerary, validate_quiz
 import os
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    _env_path = Path(__file__).resolve().parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path, override=True)
 except ImportError:
     pass
 
